@@ -8,7 +8,7 @@ from rltools.models import softmax_mlp
 
 env = gym.make("CartPole-v0")
 
-# define some parameters, see at trpo source to see the defaults
+# define some parameters, see trpo source to see the defaults
 config = {}
 config["train_iterations"] = 100 # number of trpo iterations
 config["max_pathlength"] = 300 # maximum length of an env trajecotry
