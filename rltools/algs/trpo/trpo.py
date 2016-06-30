@@ -9,7 +9,7 @@ import prettytensor as pt
 
 class TRPOSolver(object):
 
-    def __init__(self, env, config=None, policy_net=None):
+    def __init__(self, env, config=None, policy_net=None, input_layer=None):
         self.env = env
 
         if config is None: config = {}
@@ -19,7 +19,7 @@ class TRPOSolver(object):
         config.setdefault('eval_trajectories', 10)
         config.setdefault('max_kl', 0.01)
         config.setdefault('gamma', 0.95)
-        config.setdefault('explained_variance_thresh', 0.95)
+        config.setdefault('explained_variance_thresh', 0.99)
 
         self.config = config
 
@@ -29,20 +29,20 @@ class TRPOSolver(object):
 
         dtype = tf.float32
 
-        self.obs = obs = tf.placeholder(dtype, shape=[None,] + list(env.observation_space.shape), name="obs")
-
         self.action = action = tf.placeholder(tf.int64, shape=[None], name="action")  
         self.advant = advant = tf.placeholder(dtype, shape=[None], name="advant")  
         self.oldaction_dist = oldaction_dist = tf.placeholder(dtype, shape=[None, env.action_space.n], name="oldaction_dist")
 
         # Create neural network.
-        if policy_net is None:
+        if policy_net is None or input_layer is None:
+            self.obs = obs = tf.placeholder(dtype, shape=[None,] + list(env.observation_space.shape), name="obs")
             action_dist_n, _ = (pt.wrap(self.obs).
                                 fully_connected(32, activation_fn=tf.nn.tanh).
                                 fully_connected(32, activation_fn=tf.nn.tanh).
                                 softmax_classifier(env.action_space.n))
         else:
             action_dist_n = policy_net
+            self.obs = obs = input_layer
         eps = 1e-6
         self.action_dist_n = action_dist_n
         N = tf.shape(obs)[0]
