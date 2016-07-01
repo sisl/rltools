@@ -6,7 +6,6 @@ from rltools.algs import TRPOSolver
 from rltools.utils import simulate
 from rltools.models import softmax_mlp
 
-#env = gym.make("CartPole-v0")
 env = gym.make("CartPole-v0")
 
 # define some parameters, see trpo source to see the defaults
