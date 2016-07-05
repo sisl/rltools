@@ -10,9 +10,13 @@ env = gym.make("CartPole-v0")
 
 # define some parameters, see trpo source to see the defaults
 config = {}
-config["train_iterations"] = 100 # number of trpo iterations
-config["max_pathlength"] = 300 # maximum length of an env trajecotry
-config["gamma"] = 0.99 # discount factor
+config["train_iterations"] = 1 # number of trpo iterations
+config["max_pathlength"] = 250 # maximum length of an env trajecotry
+config["timesteps_per_batch"] = 1000
+config["eval_trajectories"] = 50
+config["eval_every"] = 50
+config["gamma"] = 0.95 # discount factor
+config["save_path"] = "results" # will create a results directory for our data
 
 # lets initialize a model
 input_obs = tf.placeholder(tf.float32, shape=(None,) + env.observation_space.shape, name="obs")
