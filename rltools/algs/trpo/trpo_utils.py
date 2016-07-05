@@ -66,8 +66,8 @@ class VF(object):
         self.x = tf.placeholder(tf.float32, shape=[None, shape], name="x")
         self.y = tf.placeholder(tf.float32, shape=[None], name="y")
         self.net = (pt.wrap(self.x).
-                    fully_connected(64, activation_fn=tf.nn.relu).
-                    fully_connected(64, activation_fn=tf.nn.relu).
+                    fully_connected(128, activation_fn=tf.nn.relu).
+                    fully_connected(128, activation_fn=tf.nn.relu).
                     fully_connected(1))
         self.net = tf.reshape(self.net, (-1, ))
         l2 = (self.net - self.y) * (self.net - self.y)
@@ -125,8 +125,6 @@ def numel(x):
 
 
 def flatgrad(loss, var_list):
-    print loss
-    print var_list
     grads = tf.gradients(loss, var_list)
     return tf.concat(0, [tf.reshape(grad, [numel(v)])
                          for (v, grad) in zip(var_list, grads)])

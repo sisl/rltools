@@ -4,7 +4,6 @@ import tensorflow as tf
 def softmax_mlp(input_data, output_size, layers=[32,32], activation=tf.nn.relu):
 
     net = pt.wrap(input_data).sequential()
-    net.flatten()
     for l_size in layers:
         net.fully_connected(l_size, activation_fn=activation) 
     output_layer, _ = net.softmax_classifier(output_size)
@@ -15,14 +14,20 @@ def softmax_mlp(input_data, output_size, layers=[32,32], activation=tf.nn.relu):
 def softmax_conv(input_data, output_size, kernels=[3,3], depths=[16,32], strides=[1,1], fc_layers=[32], activation=tf.nn.relu):
 
     net = pt.wrap(input_data).sequential()
+    count = 0
     for k, d, s in zip(kernels, depths, strides):
-        net.conv2d(k, d, stride=s, activation_fn=activation)
+        net.conv2d(k, d, stride=s, activation_fn=activation, name="conv_" + str(count))
+        count += 1
     net.flatten()
-    for fc in fc_layers:
-        net.fully_connected(fc, activation_fn=activation)
+    for i, fc in enumerate(fc_layers):
+        net.fully_connected(fc, activation_fn=activation, name="fc_" + str(i))
     output_layer, _ = net.softmax_classifier(output_size)
 
     return output_layer
+
+
+def softmax_lst():
+    pass
 
 
 

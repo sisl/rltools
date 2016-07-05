@@ -1,7 +1,9 @@
 from trpo_utils import *
 import numpy as np
+import csv
 import random
 import tensorflow as tf
+from tensorflow.python.ops import gradients
 import time
 import os
 import prettytensor as pt
@@ -16,14 +18,22 @@ class TRPOSolver(object):
         config.setdefault('train_iterations', 100)
         config.setdefault('max_pathlength', 100)
         config.setdefault('timesteps_per_batch', 1000)
-        config.setdefault('eval_trajectories', 10)
+        config.setdefault('eval_trajectories', 100)
+        config.setdefault('eval_every', 50)
         config.setdefault('max_kl', 0.01)
         config.setdefault('gamma', 0.95)
         config.setdefault('explained_variance_thresh', 0.99)
+        config.setdefault('save_path', "results")
 
         self.config = config
 
+        if not os.path.exists(self.config["save_path"]):
+            os.makedirs(self.config["save_path"])
+        self.model_file = os.path.join(self.config["save_path"], "final_model.ckpt")
+        self.stats_file = os.path.join(self.config["save_path"], "final_stats.txt")
+
         self.session = tf.Session()
+        self.saver = tf.train.Saver()
         self.end_count = 0
         self.train = True
 
@@ -64,14 +74,16 @@ class TRPOSolver(object):
         self.train_stats["Time elapsed"] = []
         self.train_stats["KL between old and new distribution"] = []
         self.train_stats["Surrogate loss"] = []
+        self.train_stats["Eval Reward"] = []
+        self.train_stats["Eval Iterations"] = []
 
         self.losses = [surr, kl, ent]
         self.pg = flatgrad(surr, var_list)
         # KL divergence where first arg is fixed
         # replace old->tf.stop_gradient from previous kl
         kl_firstfixed = tf.reduce_sum(tf.stop_gradient(
-            action_dist_n) * tf.log(tf.stop_gradient(action_dist_n + eps) / (action_dist_n + eps))) / Nf
-        grads = tf.gradients(kl_firstfixed, var_list)
+            action_dist_n) * tf.log(tf.stop_gradient(action_dist_n + eps) / (action_dist_n + eps))) / Nf # y
+        grads = tf.gradients(kl_firstfixed, var_list) # var_list is x
         self.flat_tangent = tf.placeholder(dtype, shape=[None])
         shapes = map(var_shape, var_list)
         start = 0
@@ -81,8 +93,11 @@ class TRPOSolver(object):
             param = tf.reshape(self.flat_tangent[start:(start + size)], shape)
             tangents.append(param)
             start += size
-        gvp = [tf.reduce_sum(g * t) for (g, t) in zip(grads, tangents)]
+        gvp = [tf.reduce_sum(g * t) for (g, t) in zip(grads, tangents)] # v is tangent
+
         self.fvp = flatgrad(gvp, var_list)
+        #self.fvp = gradients._hessian_vector_product(kl_firstfixed, var_list, tangents) 
+        # 
         self.gf = GetFlat(self.session, var_list)
         self.sff = SetFromFlat(self.session, var_list)
         self.vf = VF(self.session)
@@ -187,13 +202,16 @@ class TRPOSolver(object):
                 numeptotal += len(episoderewards)
                 stats["Total number of episodes"] = numeptotal
                 stats["Average sum of rewards per episode"] = episoderewards.mean()
-                stats["Eval Reward"] = eval_policy(self.env, self, self.config["eval_trajectories"], self.config["max_pathlength"])
                 stats["Entropy"] = entropy
                 exp = explained_variance(np.array(baseline_n), np.array(returns_n))
                 stats["Baseline explained"] = exp
-                stats["Time elapsed"] = "%.2f mins" % ((time.time() - start_time) / 60.0)
+                stats["Time elapsed"] = round(((time.time() - start_time) / 60.0), 2)
                 stats["KL between old and new distribution"] = kloldnew
                 stats["Surrogate loss"] = surrafter
+                if i % self.config["eval_every"] is 0:
+                    stats["Eval Reward"] = eval_policy(self.env, self, self.config["eval_trajectories"], self.config["max_pathlength"])
+                    stats["Eval Iterations"] = i
+
                 for k, v in stats.iteritems():
                     print(k + ": " + " " * (40 - len(k)) + str(v))
                     self.train_stats[k].append(v)
@@ -207,3 +225,24 @@ class TRPOSolver(object):
             if i >= self.config["train_iterations"]:
                 break
             i += 1
+        self.save(self.model_file)
+        self.save_stats(self.stats_file)
+
+
+    def save(self, file_name):
+        self.saver.save(self.session, file_name)
+
+    def load(self, file_name):
+        self.saver.restore(self.session, file_name)
+
+    def save_stats(self, file_name):
+        w = csv.writer(open(file_name, "wb"))
+        for key, val in self.train_stats.items():
+            w.writerow([key, val])
+
+    def load_stats(self, file_name):
+        stats = {}
+        for key, val in csv.reader(open(file_name)):
+            # strip the val string, split it, map it to float list
+            stats[key] = map(float, val[1:-1].split(', '))
+        return stats
