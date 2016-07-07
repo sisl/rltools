@@ -15,9 +15,9 @@ def simulate(env, policy, maxsteps, render=False):
 
 
 def evaluate(env, policy, maxsteps, n_traj, render=False):
-    obs = env.reset()
     rewards = np.zeros(n_traj)
     for i in xrange(n_traj):
+        obs = env.reset()
         rtot = 0.0
         for _ in xrange(maxsteps):
             if render: env.render()
@@ -26,6 +26,6 @@ def evaluate(env, policy, maxsteps, n_traj, render=False):
             rtot += reward
             if done:
                 break
-        rewardsi[i] = rtot
+        rewards[i] = rtot
     return rewards
 

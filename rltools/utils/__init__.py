@@ -1,1 +1,1 @@
-from sims import simulate
+from sims import *
