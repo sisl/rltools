@@ -15,6 +15,8 @@ def discount(x, gamma):
     assert x.ndim >= 1
     return scipy.signal.lfilter([1], [1, -gamma], x[::-1], axis=0)[::-1]
 
+
+
 def rollout(env, agent, max_pathlength, n_timesteps):
     paths = []
     timesteps_sofar = 0
@@ -23,6 +25,41 @@ def rollout(env, agent, max_pathlength, n_timesteps):
         ob = env.reset()
         for step in xrange(max_pathlength):
             timesteps_sofar += 1
+            action, action_dist = agent.act(ob)
+            obs.append(ob)
+            actions.append(action)
+            action_dists.append(action_dist)
+            ob, r, done, _ = env.step(action)
+            rewards.append(r)
+            if done or step == (max_pathlength-1):
+                path = {"obs": np.concatenate(np.expand_dims(obs, 0)),
+                        "action_dists": np.concatenate(action_dists),
+                        "rewards": np.array(rewards),
+                        "actions": np.array(actions)}
+                paths.append(path)
+                break
+
+    return paths
+
+
+def dec_rollout(env, agent, max_pathlength, n_timesteps):
+    paths = []
+    timesteps_sofar = 0
+    while timesteps_sofar < n_timesteps:
+        obs, actions, rewards, action_dists = [], [], [], []
+        lstm_obs = np.zeros((16,) + env.observation_space.shape)
+        lstm_idx = 0
+        ob = env.reset()
+        for step in xrange(max_pathlength):
+            agent_actions, agent_rewards, agent_obs, agent_dist= [], [], [], []
+            timesteps_sofar += 1
+            for o in ob:
+                action, action_dist = agent.act(o)
+                agent_actions.append(action)
+                agent_dist.append(action_dist)
+
+                
+
             action, action_dist = agent.act(ob)
             obs.append(ob)
             actions.append(action)

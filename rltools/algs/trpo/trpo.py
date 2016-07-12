@@ -11,7 +11,7 @@ import prettytensor as pt
 
 class TRPOSolver(object):
 
-    def __init__(self, env, config=None, policy_net=None, input_layer=None):
+    def __init__(self, env, session, config=None, policy_net=None, input_layer=None):
         self.env = env
 
         if config is None: config = {}
@@ -32,7 +32,7 @@ class TRPOSolver(object):
         self.model_file = os.path.join(self.config["save_path"], "final_model.ckpt")
         self.stats_file = os.path.join(self.config["save_path"], "final_stats.txt")
 
-        self.session = tf.Session()
+        self.session = session
         self.saver = tf.train.Saver()
         self.end_count = 0
         self.train = True
@@ -101,6 +101,9 @@ class TRPOSolver(object):
         self.gf = GetFlat(self.session, var_list)
         self.sff = SetFromFlat(self.session, var_list)
         self.vf = VF(self.session)
+
+
+    def initialize(self):
         self.session.run(tf.initialize_all_variables())
 
     def act(self, obs, *args):

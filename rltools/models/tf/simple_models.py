@@ -26,8 +26,18 @@ def softmax_conv(input_data, output_size, kernels=[3,3], depths=[16,32], strides
     return output_layer
 
 
-def softmax_lst():
-    pass
+def softmax_lstm(input_data, output_size, timesteps, fc_layers=[32], lstm_layers=[32,32], activation=tf.nn.relu):
+
+    net = pt.wrap(input_data).sequential()
+    for l_size in fc_layers:
+        net.fully_connected(l_size, activation_fn=activation) 
+    net.cleave_sequence(timesteps)
+    for l_size in lstm_layers:
+        net.sequence_lstm(l_size)
+    net.squash_sequence()
+    output_layer, _ = net.softmax_classifier(output_size)
+
+    return output_layer
 
 
 
