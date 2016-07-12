@@ -39,11 +39,11 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         self.sampler = SimpleSampler(self, max_traj_len, batch_size)
         self.total_time = 0.0
 
-    def train(self, sess, log):
+    def train(self, sess, log, save_freq):
         for itr in range(self.start_iter, self.n_iter):
             iter_info = self.step(sess, itr)
             log.write(iter_info, print_header=itr % 20 == 0)
-            if itr % 20 == 0:
+            if itr % save_freq == 0:
                 log.write_snapshot(sess, self.policy, itr)
 
     def step(self, sess, itr):

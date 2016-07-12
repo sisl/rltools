@@ -60,6 +60,7 @@ def raggedstack(arrays, fill=0., axis=0, raggedaxis=1):
     assert pos == out.shape[0]
     return out
 
+
 class RaggedArray(object):
     def __init__(self, arrays, lengths=None):
         if lengths is None:
@@ -156,6 +157,7 @@ class Sampler(object):
         v = RaggedArray(v_stacked, lengths=trajlens)
 
         # Compare squared loss of value function to that of time-dependent value function
+        # Explained variance
         constfunc_prediction_loss = np.var(q.stacked)
         simplev_prediction_loss = np.var(q.stacked-simplev.stacked)
         simplev_r2 = 1. - simplev_prediction_loss/(constfunc_prediction_loss + 1e-8)

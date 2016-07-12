@@ -38,7 +38,7 @@ class Model(object):
     def save_h5(self, sess, h5file, key, extra_attrs=None):
         with h5py.File(h5file, 'a') as f:
             if key in f:
-                print('WARNING: key {} already exists in {}'.format(key, h5file))
+                util.warn('WARNING: key {} already exists in {}'.format(key, h5file))
                 dset = f[key]
             else:
                 dset = f.create_group(key)
@@ -53,7 +53,7 @@ class Model(object):
             if extra_attrs is not None:
                 for k, v in extra_attrs:
                     if k in dset.attrs:
-                        print('Warning: attribute {} already exists in {}'.format(k, dset.name))
+                        util.warn('Warning: attribute {} already exists in {}'.format(k, dset.name))
                         dset.attrs[k] = v
 
     def load_h5(self, sess, h5file, key):
@@ -62,7 +62,7 @@ class Model(object):
 
             ops = []
             for v in self.get_trainable_variables():
-                print('Reading {}'.format(v.name))
+                util.header('Reading {}'.format(v.name))
                 ops.append(v.assign(dset[v.name][...]))
                 sess.run(ops)
 
@@ -85,7 +85,7 @@ class Layer(Model):
 class ReshapeLayer(Layer):
     def __init__(self, input_, new_shape):
         self._output_shape = tuple(new_shape)
-        print('Reshape(new_shape=%s)' % (str(self._output_shape),))
+        util.header('Reshape(new_shape=%s)' % (str(self._output_shape),))
         with tf.variable_scope(type(self).__name__) as self.varscope:
             self._output = tf.reshape(input_, (-1,)+self._output_shape)
     @property
@@ -97,7 +97,7 @@ class ReshapeLayer(Layer):
 class AffineLayer(Layer):
     def __init__(self, input_B_Di, input_shape, output_shape, initializer):
         assert len(input_shape) == len(output_shape) == 1
-        print('Affine(in=%d, out=%d)' % (input_shape[0], output_shape[0]))
+        util.header('Affine(in=%d, out=%d)' % (input_shape[0], output_shape[0]))
         self._output_shape = (output_shape[0],)
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if initializer is None:
@@ -114,7 +114,7 @@ class AffineLayer(Layer):
 
 class NonlinearityLayer(Layer):
     def __init__(self, input_B_Di, output_shape, func):
-        print('Nonlinearity(func=%s)' % func)
+        util.header('Nonlinearity(func=%s)' % func)
         self._output_shape = output_shape
         with tf.variable_scope(type(self).__name__) as self.varscope:
             self.output_B_Do = {'relu': tf.nn.relu, 'elu': tf.nn.elu, 'tanh': tf.tanh}[func](input_B_Di)
@@ -129,7 +129,7 @@ class ConvLayer(Layer):
         # TODO: calculate Oh and Ow from the other stuff.
         assert len(input_shape) == 3
         Ci = input_shape[2]
-        print('Conv(chanin=%d, chanout=%d, filth=%d, filtw=%d, outh=%d, outw=%d, strideh=%d, stridew=%d, padding=%s)' % (Ci, Co, Fh, Fw, Oh, Ow, Sh, Sw, padding))
+        util.header('Conv(chanin=%d, chanout=%d, filth=%d, filtw=%d, outh=%d, outw=%d, strideh=%d, stridew=%d, padding=%s)' % (Ci, Co, Fh, Fw, Oh, Ow, Sh, Sw, padding))
         self._output_shape = (Oh, Ow, Co)
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if initializer is None:
@@ -165,8 +165,8 @@ class FeedforwardNet(Layer):
         self.input_B_Di = input_B_Di
 
         layerspec = json.loads(layerspec_json)
-        print('Loading feedforward net specification')
-        print(json.dumps(layerspec, indent=2, separators=(',', ': ')))
+        util.ok('Loading feedforward net specification')
+        util.header(json.dumps(layerspec, indent=2, separators=(',', ': ')))
 
         self.layers = []
         with tf.variable_scope(type(self).__name__) as self.varscope:
@@ -296,4 +296,4 @@ def test_standardizer():
         allx = np.concatenate([x_N_D, x2_N_D], axis=0)
         assert np.allclose(s.get_mean(sess)[0,:], allx.mean(axis=0))
         assert np.allclose(s.get_stdev(sess)[0,:], allx.std(axis=0))
-        print('standardizer ok')
+        util.ok('standardizer ok')

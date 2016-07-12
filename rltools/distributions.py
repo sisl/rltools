@@ -1,6 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
+TINY = 1e-10
 
 class Distribution(object):
 
@@ -27,7 +28,7 @@ class Categorical(Distribution):
         return self._dim
 
     def entropy(self, probs_N_K):
-        tmp = -probs_N_K * np.log(probs_N_K + 1e-10)
+        tmp = -probs_N_K * np.log(probs_N_K + TINY)
         tmp[~np.isfinite(tmp)] = 0
         return tmp.sum(axis=1)
 
