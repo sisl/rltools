@@ -36,7 +36,8 @@ def lookup_last_idx(a, inds, name=None):
         aflat, indsflat = tf.reshape(a, [-1]), tf.reshape(inds, [-1])
 
         # Compute the indices corresponding to inds in the flattened array
-        delta = tf.gather(ashape, tf.size(ashape)-1) # i.e. delta = ashape[-1]
+        # TODO Causes UserWarning: Converting sparse IndexedSlices to a dense Tensor of unknown shape.
+        delta = tf.gather(ashape, tf.size(ashape)-1) # i.e. delta = ashape[-1],
         aflatinds = tf.range(0, limit=tf.size(a), delta=delta) + indsflat
 
         # Look up the desired elements in the flattened array, and reshape
