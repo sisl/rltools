@@ -26,7 +26,10 @@ def _type_to_col(t, pos):
 
 
 class TrainingLog(object):
-    """A training log backed by PyTables. Stores diagnostics numbers as well as model snapshots"""
+    """A training log backed by PyTables.
+
+    Stores diagnostics numbers as well as model snapshots
+    """
     def __init__(self, filename, attrs):
         if filename is None:
             print('WARNING: not writing to any file')
@@ -79,7 +82,7 @@ class TrainingLog(object):
         # Get var values
         vs = model.get_trainable_variables()
         vals = sess.run(vs)
-        
+
         # Save all variables into this group
         snapshot_root = '/snapshots/iter%07d' % key_iter
 

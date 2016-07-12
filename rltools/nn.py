@@ -28,7 +28,7 @@ class Model(object):
         return hashlib.sha1('|'.join('%s %s' for n, h in sorted([(name, hash_array(a)) for name, a in name2array]))).hexdigest()
 
     def savehash(self, sess):
-        '''Hash is based on values of TRAINABLE variables only'''
+        """Hash is based on values of TRAINABLE variables only"""
         vars_ = self.get_trainable_variables()
         vals = sess.run(vars_)
         return self._hash_name2array([(v.name, val) for v, val in util.safezip(vars_, vals)])
@@ -67,7 +67,7 @@ class Model(object):
                 sess.run(ops)
 
             h = self.savehash(sess)
-            assert h == dset.attrs['hash'], 'Checkpoint hash %s does not match loaded hash %s' % (dset.attrs['hash'], h)
+            assert h == dset.attrs['hash'], 'Checkpoint hash {} does not match loaded hash {}'.format(dset.attrs['hash'], h)
 
 # Layers for feedforward networks
 

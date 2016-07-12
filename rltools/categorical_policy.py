@@ -8,11 +8,13 @@ from distributions import Categorical
 
 
 class CategoricalMLPPolicy(StochasticPolicy):
-    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, tblog, varscope_name):
+    def __init__(self, obsfeat_space, action_space,
+                 hidden_spec, enable_obsnorm, tblog, varscope_name):
         self.hidden_spec = hidden_spec
         self._dist = Categorical(action_space.n)
-        super(CategoricalMLPPolicy, self).__init__(obsfeat_space, action_space, action_space.n, enable_obsnorm, tblog, varscope_name)
-
+        super(CategoricalMLPPolicy, self).__init__(obsfeat_space, action_space,
+                                                   action_space.n, enable_obsnorm,
+                                                   tblog, varscope_name)
 
     @property
     def distribution(self):

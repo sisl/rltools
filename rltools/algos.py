@@ -1,7 +1,6 @@
 import numpy as np
 
 import optim
-import tfutil
 import util
 from policy import StochasticPolicy
 from sampler import SimpleSampler
@@ -96,5 +95,10 @@ def TRPO(max_kl, subsample_hvp_frac=.25, damping=1e-2, grad_stop_tol=1e-6, max_c
         feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked, advstacked_N)
 
         step_info = policy._ngstep(sess, feed, max_kl=max_kl, damping=damping, subsample_hvp_frac=subsample_hvp_frac, grad_stop_tol=grad_stop_tol)
-        return step_info
+        return [
+            ('dl', step_info.obj1-step_info.obj0, float), # Improvement in objective
+            ('kl', step_info.kl1, float),                 # kl cost
+            ('gnorm', step_info.gnorm, float),            # gradient norm
+            ('bt', step_info.bt, int),                    # backtracking steps
+        ]
     return trpo_step

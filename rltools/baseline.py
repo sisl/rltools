@@ -4,8 +4,8 @@ import numpy as np
 import scipy.linalg
 import tensorflow as tf
 
-import optim
 import nn
+import optim
 import tfutil
 import util
 
@@ -90,7 +90,13 @@ class LinearFeatureBaseline(Baseline):
 
 
 class MLPBaseline(Baseline, nn.Model):
-    def __init__(self, obsfeat_space, hidden_spec, enable_obsnorm, enable_vnorm, max_kl, damping, varscope_name, subsample_hvp_frac=.1, grad_stop_tol=1e-6, time_scale=1.):
+    """ Multi Layer Perceptron baseline
+
+    Optimized using natural gradients.
+    """
+    def __init__(self, obsfeat_space, hidden_spec, enable_obsnorm, enable_vnorm,
+                 max_kl, damping, varscope_name,
+                 subsample_hvp_frac=.1, grad_stop_tol=1e-6, time_scale=1.):
         self.obsfeat_space = obsfeat_space
         self.hidden_spec = hidden_spec
         self.enable_obsnorm = enable_obsnorm
@@ -184,20 +190,29 @@ class MLPBaseline(Baseline, nn.Model):
     def _predict_raw(self, sess, obsfeat_B_Df, t_B):
         return sess.run(self.val_B, {self.obsfeat_B_Df: obsfeat_B_Df, self.t_B_1: t_B[:, None]})
 
-    def fit(self, sess, trajs, qvals):
+    def fit(self, sess, trajs, qval_B):
         obs_B_Do = trajs.obs.stacked
         t_B = trajs.time.stacked
 
         # Update norm
         self.obsnorm.update(sess, obs_B_Do)
-        self.vnorm.update(sess, qvals[:, None])
+        self.vnorm.update(sess, qval_B[:, None])
 
         # Take step
         sobs_B_Do = self.obsnorm.standardize(sess, obs_B_Do)
-        sqvals_B = self.vnorm.standardize(sess, qvals[:, None])[:, 0]
-        feed = (sobs_B_Do, t_B, sqvals_B, self._predict_raw(sess, sobs_B_Do, t_B))
-        stepinfo = self._ngstep(sess, feed, max_kl=self.max_kl, damping=self.damping, subsample_hvp_frac=self.subsample_hvp_frac, grad_stop_tol=self.grad_stop_tol)
-        return stepinfo
+        sqval_B = self.vnorm.standardize(sess, qval_B[:, None])[:, 0]
+        feed = (sobs_B_Do, t_B, sqval_B, self._predict_raw(sess, sobs_B_Do, t_B))
+        step_info = self._ngstep(sess, feed,
+                                 max_kl=self.max_kl,
+                                 damping=self.damping,
+                                 subsample_hvp_frac=self.subsample_hvp_frac,
+                                 grad_stop_tol=self.grad_stop_tol)
+        return [
+            ('vf_dl', step_info.obj1-step_info.obj0, float), # Improvement in objective
+            ('vf_kl', step_info.kl1, float),                 # kl cost
+            ('vf_gnorm', step_info.gnorm, float),            # gradient norm
+            ('vf_bt', step_info.bt, int),                    # backtracking steps
+        ]
 
     def predict(self, sess, trajs):
         obs_B_Do = trajs.obs.stacked
