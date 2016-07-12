@@ -124,10 +124,17 @@ class Sampler(object):
     """
     Base Sampler class
     """
-    def __init__(self, algo, max_traj_len, batch_size):
+    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive):
         self.algo = algo
         self.max_traj_len = max_traj_len
+        self.adaptive = adaptive
         self.batch_size = batch_size
+        if self.adaptive:
+            self.batch_size = min_batch_size
+        self.min_batch_size = min_batch_size
+        self.max_batch_size = max_batch_size
+        self.batch_rate = batch_rate
+
 
     def start(self):
         """Init sampler"""
@@ -183,10 +190,14 @@ class Sampler(object):
 
 
 class SimpleSampler(Sampler):
-    def __init__(self, algo, max_traj_len, batch_size):
-        super(SimpleSampler, self).__init__(algo, max_traj_len, batch_size)
+    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False):
+        super(SimpleSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
 
     def sample(self, sess, itr):
+        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
+            if itr % self.batch_rate == 0:
+                self.batch_size *= 2
+
         trajs = []
         for _ in range(self.batch_size):
             obs, obsfeat, actions, actiondists, rewards = [], [], [], [], []
