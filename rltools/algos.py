@@ -21,7 +21,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                  center_adv=True, positive_adv=False,
                  store_paths=False, whole_paths=True,
                  max_traj_len=200, batch_size=32,
-                 adaptive_batch=False, min_batch_size=4, max_batch_size=1024, batch_rate=20,
+                 adaptive_batch=False, min_batch_size=4, max_batch_size=64, batch_rate=40,
                  **kwargs):
         self.env = env
         self.policy = policy
