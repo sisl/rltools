@@ -16,7 +16,7 @@ class RLAlgorithm(Algorithm):
 
 
 class SamplingPolicyOptimizer(RLAlgorithm):
-    def __init__(self, env, policy, baseline, step_func,
+    def __init__(self, env, policy, baseline, step_func, obsfeat_fn=lambda obs: obs,
                  discount=0.99, gae_lambda=1, n_iter=500, start_iter=0,
                  center_adv=True, positive_adv=False,
                  store_paths=False, whole_paths=True,
@@ -26,6 +26,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         self.policy = policy
         self.baseline = baseline
         self.step_func = step_func
+        self.obsfeat_fn = obsfeat_fn
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.n_iter = n_iter
@@ -34,7 +35,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
-        # TODO obsfeat
+
         self.sampler = SimpleSampler(self, max_traj_len, batch_size)
         self.total_time = 0.0
 

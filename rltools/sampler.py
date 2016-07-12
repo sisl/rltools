@@ -29,7 +29,7 @@ class Trajectory(object):
     @classmethod
     def LoadH5(cls, grp, obsfeat_fn):
         """
-        obsfeat_fn: Used to fill in observation features. 
+        obsfeat_fn: Used to fill in observation features.
                     If None, the raw observations will be copied over.
         """
         obs_T_Do = grp['obs_T_Do'][...]
@@ -127,7 +127,7 @@ class Sampler(object):
         self.algo = algo
         self.max_traj_len = max_traj_len
         self.batch_size = batch_size
-        
+
     def start(self):
         """Init sampler"""
         raise NotImplementedError()
@@ -154,7 +154,7 @@ class Sampler(object):
         # State-dependent baseline
         v_stacked = self.algo.baseline.predict(sess, trajbatch); assert v_stacked.ndim == 1
         v = RaggedArray(v_stacked, lengths=trajlens)
-        
+
         # Compare squared loss of value function to that of time-dependent value function
         constfunc_prediction_loss = np.var(q.stacked)
         simplev_prediction_loss = np.var(q.stacked-simplev.stacked)
@@ -190,10 +190,7 @@ class SimpleSampler(Sampler):
             obs, obsfeat, actions, actiondists, rewards = [], [], [], [], []
             obs.append((self.algo.env.reset())[None,...].copy())
             for itr in range(self.max_traj_len):
-                # TODO obsfeat_fn
-                #obsfeat.append(self.algo.obsfeat_fn(obs[-1]))
-                
-                obsfeat.append(obs[-1])
+                obsfeat.append(self.algo.obsfeat_fn(obs[-1]))
                 a, adist = self.algo.policy.sample_actions(sess, obsfeat[-1])
                 actions.append(a)
                 actiondists.append(adist)
