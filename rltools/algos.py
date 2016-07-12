@@ -35,7 +35,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         self.positive_adv = positive_adv
         self.store_paths = store_paths
         self.whole_paths = whole_paths
-
+        # TODO: variable batch_size
         self.sampler = SimpleSampler(self, max_traj_len, batch_size)
         self.total_time = 0.0
 
@@ -45,6 +45,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             log.write(iter_info, print_header=itr % 20 == 0)
             if itr % save_freq == 0:
                 log.write_snapshot(sess, self.policy, itr)
+                log.write_snapshot(sess, self.baseline, itr)
 
     def step(self, sess, itr):
         with util.Timer() as t_all:

@@ -3,6 +3,7 @@ import os
 import tableprint
 import tables
 
+import nn
 import util
 
 
@@ -80,7 +81,9 @@ class TrainingLog(object):
 
     def write_snapshot(self, sess, model, key_iter):
         if self.f is None: return
-
+        if not isinstance(model, nn.Model):
+            util.warn("WARNING: trying to save a non NN model. Skipping...")
+            return
         # Get var values
         vs = model.get_trainable_variables()
         vals = sess.run(vs)
