@@ -4,12 +4,10 @@ import errno
 import os
 import timeit
 
-import colorama
 import h5py
 import numpy as np
 from colorama import Fore, Style
 
-colorama.init(autoreset=True)
 
 
 class Timer(object):
@@ -89,8 +87,15 @@ def safezip(*ls):
 def maxnorm(a):
     return np.abs(a).max()
 
+class Color(object):
+    HEADER = '\033[95m'
+    OKBLUE = '\033[94m'
+    OKGREEN = '\033[92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    ENDC = '\033[0m'
 
-def header(s): print(Fore.CYAN + '{}'.format(s))
-def warn(s): print(Fore.YELLOW + '{}'.format(s))
-def failure(s): print(Fore.RED + '{}'.format(s))
-def ok(s): print(Fore.BLUE + '{}'.format(s))
+def header(s): print(Color.HEADER + '{}'.format(s.encode('utf-8')) + Color.ENDC)
+def warn(s): print(Color.WARNING + '{}'.format(s.encode('utf-8')) + Color.ENDC)
+def failure(s): print(Color.FAIL + '{}'.format(s.encode('utf-8')) + Color.ENDC)
+def ok(s): print(Color.OKBLUE + '{}'.format(s.encode('utf-8')) + Color.ENDC)
