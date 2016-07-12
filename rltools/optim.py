@@ -26,7 +26,7 @@ def btlinesearch(f, x0, fx0, g, dx, accept_ratio, shrink_factor, max_steps, verb
     if fx0 is None: fx0 = f(x0)
     t = 1.
     m = g.dot(dx)
-    if accept_ratio != 0 and m > 0: print('WARNING: %.10f not <= 0' % m)
+    if accept_ratio != 0 and m > 0: util.warn('WARNING: %.10f not <= 0' % m)
     num_steps = 0
     while num_steps < max_steps:
         true_imp = f(x0 + t*dx) - fx0

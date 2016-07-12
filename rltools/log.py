@@ -3,6 +3,8 @@ import os
 import tableprint
 import tables
 
+import util
+
 
 def _printfields(fields, print_header=True):
     names, vals = [], []
@@ -32,7 +34,7 @@ class TrainingLog(object):
     """
     def __init__(self, filename, attrs):
         if filename is None:
-            print('WARNING: not writing to any file')
+            util.warn('WARNING: not writing to any file')
             self.f = None
         else:
             if os.path.exists(filename):

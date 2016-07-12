@@ -135,12 +135,12 @@ class StochasticPolicy(Policy):
         """Actually evaluate action distribution params"""
         return sess.run(self._actiondist_B_Pa, {self._obsfeat_B_Df: obsfeat_B_Df})
 
-    def sample_actions(self, sess, obsfeat_B_Df):
+    def sample_actions(self, sess, obsfeat_B_Df, deterministic=False):
         """Sample actions conditioned on observations
         (Also returns the params)
         """
         actiondist_B_Pa = self.compute_action_dist_params(sess, obsfeat_B_Df)
-        return self._sample_from_actiondist(actiondist_B_Pa), actiondist_B_Pa
+        return self._sample_from_actiondist(actiondist_B_Pa, deterministic), actiondist_B_Pa
 
     def compute_action_logprobs(self, sess, obsfeat_B_Df, actions_B_Da):
         return sess.run(self._logprobs_B, {self._obsfeat_B_Df: obsfeat_B_Df,
