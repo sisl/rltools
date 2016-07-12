@@ -36,8 +36,10 @@ class CategoricalMLPPolicy(StochasticPolicy):
     def _make_actiondist_kl_ops(self, proposal_actiondist_B_Pa, actiondist_B_Pa):
         return self.distribution.kl_expr(proposal_actiondist_B_Pa, actiondist_B_Pa)
 
-    def _sample_from_actiondist(self, actiondist_B_Pa):
+    def _sample_from_actiondist(self, actiondist_B_Pa, deterministic=False):
         probs_B_A = np.exp(actiondist_B_Pa); assert probs_B_A.shape[1] == self.action_space.n
+        if deterministic:
+            return np.argmax(probs_B_A, axis=1)[:,None]
         return self.distribution.sample(probs_B_A)[:,None]
 
     def _compute_actiondist_entropy(self, actiondist_B_Pa):
