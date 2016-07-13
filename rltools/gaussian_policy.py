@@ -45,7 +45,7 @@ class GaussianMLPPolicy(StochasticPolicy):
 
     def _make_actiondist_logprobs_ops(self, actiondist_B_Pa, input_actions_B_Da):
         means_B_Da, stdevs_B_Da = self._extract_actiondist_params(actiondist_B_Pa)
-        return self.distribution.log_density(means_B_Da, stdevs_B_Da, input_actions_B_Da)
+        return self.distribution.log_density_expr(means_B_Da, stdevs_B_Da, input_actions_B_Da)
 
     def _make_actiondist_kl_ops(self, proposal_actiondist_B_Pa, actiondist_B_Pa):
         return self.distribution.kl_expr(*map(self._extract_actiondist_params, [proposal_actiondist_B_Pa, actiondist_B_Pa]))

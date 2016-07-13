@@ -1,6 +1,8 @@
 import numpy as np
 import tensorflow as tf
 
+import tfutil
+
 TINY = 1e-10
 
 class Distribution(object):
@@ -43,6 +45,10 @@ class Categorical(Distribution):
             kl_B = tf.reduce_sum(tf.exp(logprobs1_B_A) * (logprobs1_B_A - logprobs2_B_A), 1, name=scope)
         return kl_B
 
+    def log_density_expr(self, dist_params_B_A, x_B_A):
+        """Log density from categorical distribution params"""
+        return tfutil.lookup_last_idx(dist_params_B_A, x_B_A)
+
 class Gaussian(Distribution):
     def __init__(self, dim):
         self._dim = dim
@@ -65,7 +71,7 @@ class Gaussian(Distribution):
              2.*(tf.reduce_sum(tf.log(stdevs2_B_A), 1) - tf.reduce_sum(tf.log(stdevs1_B_A), 1)) - tf.to_float(D)), name=scope)
         return kl_B
 
-    def log_density(self, means_B_A, stdevs_B_A, x_B_A, name=None):
+    def log_density_expr(self, means_B_A, stdevs_B_A, x_B_A, name=None):
         """Log density of diagonal gauss"""
         with tf.op_scope([means_B_A, stdevs_B_A, x_B_A],name, 'gauss_log_density') as scope:
             D = tf.shape(means_B_A)[1]

@@ -31,7 +31,7 @@ class CategoricalMLPPolicy(StochasticPolicy):
         return actiondist_B_Pa
 
     def _make_actiondist_logprobs_ops(self, actiondist_B_Pa, input_actions_B_Da):
-        return tfutil.lookup_last_idx(actiondist_B_Pa, input_actions_B_Da[:,0])
+        return self.distribution.log_density_expr(actiondist_B_Pa, input_actions_B_Da[:,0])
 
     def _make_actiondist_kl_ops(self, proposal_actiondist_B_Pa, actiondist_B_Pa):
         return self.distribution.kl_expr(proposal_actiondist_B_Pa, actiondist_B_Pa)
