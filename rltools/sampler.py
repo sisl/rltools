@@ -7,7 +7,8 @@ class Trajectory(object):
     __slots__ = ('obs_T_Do', 'obsfeat_T_Df', 'adist_T_Pa', 'a_T_Da', 'r_T')
     def __init__(self, obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T):
         assert (
-            obs_T_Do.ndim == 2 and obsfeat_T_Df.ndim == 2 and adist_T_Pa.ndim == 2 and a_T_Da.ndim == 2 and r_T.ndim == 1 and
+            obs_T_Do.ndim > 1 and obsfeat_T_Df.ndim > 1 and adist_T_Pa.ndim > 1 and a_T_Da.ndim > 1 and
+            r_T.ndim == 1 and
             obs_T_Do.shape[0] == obsfeat_T_Df.shape[0] == adist_T_Pa.shape[0] == a_T_Da.shape[0] == r_T.shape[0]
         )
         self.obs_T_Do = obs_T_Do
@@ -165,6 +166,10 @@ class Sampler(object):
 
         # Compare squared loss of value function to that of time-dependent value function
         # Explained variance
+        # *_r2 = 1 - var(y-ypred)/var(y)
+        # *_r2 = 0 => Useless
+        # *_r2 = 1 => Perfect
+        # *_r2 <0 => Worse than useless
         constfunc_prediction_loss = np.var(q.stacked)
         simplev_prediction_loss = np.var(q.stacked-simplev.stacked)
         simplev_r2 = 1. - simplev_prediction_loss/(constfunc_prediction_loss + 1e-8)
