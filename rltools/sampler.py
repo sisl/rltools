@@ -244,3 +244,60 @@ class BatchSampler(Sampler):
 
         # Simulations and their current trajectories
         # TODO
+
+
+class ImportanceWeightedSampler(SimpleSampler):
+    """Alternate between sampling iterations using simple sampler and importance sampling iterations"""
+    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False, n_backtrack='all'):
+        """
+        n_backtrack: number of past policies to update from
+        """
+        self.n_backtrack = n_backtrack
+        self._hist = []
+        self._is_itr = 0
+        super(ImportanceWeightedSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
+
+    @property
+    def history(self):
+        return self._hist
+
+    def add_history(self, trajbatch):
+        self.history.append(trajbatch)
+
+    def get_history(self, n_past='all'):
+        if n_past == 'all':
+            return self.history
+        assert isinstance(n_past, int)
+        return self.history[-min(n_past, len(self.history))]
+
+    def sample(self, sess, itr):
+        # Alternate between importance sampling and actual sampling
+        # Data logs will be messy TODO
+        if self._is_itr:
+            trajbatch = self.is_sample(sess, itr)
+        else:
+            trajbatch = super(ImportanceWeightedSampler, self).sample(sess, itr)
+            self.add_history(trajbatch)
+
+        self._is_itr = (self._is_itr + 1) % 2
+
+        return trajbatch
+
+    def is_sample(self, sess, itr, randomize_draw=True):
+        for hist_trajbatch in self.get_history(self.n_backtrack):
+            n_trajs = len(hist_trajbatch)
+            n_samples = min(n_trajs, self.batch_size)
+
+            if randomize_draw:
+                import random
+                samples = random.sample(hist_trajbatch, n_samples)
+            elif hist_trajbatch:
+                samples = hist_trajbatch[:n_samples]
+
+            import copy
+            samples = copy.deepcopy(samples) # Avoid overwriting
+            # TODO
+            # Calculate loglikelihoods of current policy actions and history actions
+            # importance ratio = np.exp(curr_log_like - hist_log_like)
+            # multiply rewards in samples by importance ratio
+            # return samples
