@@ -42,3 +42,33 @@ class Categorical(Distribution):
         with tf.op_scope([logprobs1_B_A, logprobs2_B_A], name, 'categorical_kl') as scope:
             kl_B = tf.reduce_sum(tf.exp(logprobs1_B_A) * (logprobs1_B_A - logprobs2_B_A), 1, name=scope)
         return kl_B
+
+class Gaussian(Distribution):
+    def __init__(self, dim):
+        self._dim = dim
+
+    @property
+    def dim(self):
+        return self._dim
+
+    def entropy(self, stdevs_B_A):
+        d = stdevs_B_A.shape[1]
+        return .5 * d * (1. + np.log(2.*np.pi)) + np.log(stdevs_B_A).sum(axis=1)
+
+    def kl_expr(self, means1_B_A, stdevs1_B_A, means2_B_A, stdevs2_B_A, name=None):
+        """KL divergence wbw diagonal covariant gaussians"""
+        with tf.op_scope([means1_B_A, stdevs1_B_A, means2_B_A, stdevs2_B_A], name, 'gaussian_kl') as scope:
+            D = tf.shape(means1_B_A)[1]
+            kl_B = tf.mul(
+                .5,
+            (tf.reduce_sum(tf.square(stdevs1_B_A/stdevs2_B_A), 1)+ tf.reduce_sum(tf.square((means2_B_A-means1_B_A)/stdevs2_B_A), 1) +
+             2.*(tf.reduce_sum(tf.log(stdevs2_B_A), 1) - tf.reduce_sum(tf.log(stdevs1_B_A), 1)) - tf.to_float(D)), name=scope)
+        return kl_B
+
+    def log_density(self, means_B_A, stdevs_B_A, x_B_A, name=None):
+        """Log density of diagonal gauss"""
+        with tf.op_scope([means_B_A, stdevs_B_A, x_B_A],name, 'gauss_log_density') as scope:
+            D = tf.shape(means_B_A)[1]
+            lognormconsts_B = -.5*tf.to_float(D)*np.log(2.*np.pi) + 2.*tf.reduce_sum(tf.log(stdevs_BA_), 1) # log norm consts
+            logprobs_B = tf.add(-.5*tf.reduce_sum(tf.square((x_B_A-means_B_A)/stdevs_B_A), 1), lognormconsts_B, name=scope)
+        return logprobs_B
