@@ -1,3 +1,6 @@
+import copy
+import random
+
 import numpy as np
 
 import util
@@ -256,6 +259,7 @@ class ImportanceWeightedSampler(SimpleSampler):
         self._hist = []
         self._is_itr = 0
         super(ImportanceWeightedSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
+        assert not self.adaptive, "Can't use adaptive sampling with importance weighted for now" # TODO needed?
 
     @property
     def history(self):
@@ -284,20 +288,37 @@ class ImportanceWeightedSampler(SimpleSampler):
         return trajbatch
 
     def is_sample(self, sess, itr, randomize_draw=True):
+        rettrajs = []
         for hist_trajbatch in self.get_history(self.n_backtrack):
             n_trajs = len(hist_trajbatch)
             n_samples = min(n_trajs, self.batch_size)
 
             if randomize_draw:
-                import random
                 samples = random.sample(hist_trajbatch, n_samples)
             elif hist_trajbatch:
                 samples = hist_trajbatch[:n_samples]
 
-            import copy
             samples = copy.deepcopy(samples) # Avoid overwriting
-            # TODO
-            # Calculate loglikelihoods of current policy actions and history actions
-            # importance ratio = np.exp(curr_log_like - hist_log_like)
-            # multiply rewards in samples by importance ratio
-            # return samples
+            for traj in samples:
+                # What the current policy would have done
+                _, adist_T_Pa = self.algo.policy.sample_actions(sess, traj.obsfeat_T_Df)
+                # What the older policy did
+                hist_adist_T_Pa = traj.adist_T_Pa
+                assert traj.adist_T_Pa.shape == adist_T_Pa
+                # Use newer policy distribution
+                traj.adist_T_Pa = adist_T_Pa
+
+                # Log probabilities of actions using previous and current
+                logprob_curr = self.algo.policy.distribution.log_density(adist_T_Pa, traj.a_T_Da)
+                logprob_hist = self.algo.policy.distribution.log_density(hist_adist_T_Pa, traj.a_T_Da)
+                # Importance sampling ratio
+                is_ratio = np.exp(logprob_curr.sum() - logprob_hist.sum())
+                # Weight the rewards accordingly
+                traj.r_T *= is_ratio
+
+            rettrajs.append(samples)
+        # Pack them back
+        rettrajbatch = TrajBatch.FromTrajs(rettrajs)
+        if len(rettrajbatch) > self.batch_size:
+            rettrajbatch = random.sample(rettrajbatch, self.batch_size)
+        return rettrajbatch

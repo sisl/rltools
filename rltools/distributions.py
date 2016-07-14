@@ -2,8 +2,10 @@ import numpy as np
 import tensorflow as tf
 
 import tfutil
+import util
 
 TINY = 1e-10
+
 
 class Distribution(object):
 
@@ -14,10 +16,19 @@ class Distribution(object):
     def kl(self, old, new):
         raise NotImplementedError()
 
-    def entropy(self, probs_N_K):
+    def log_density(self, dist_params, x):
         raise NotImplementedError()
 
-    def sample(self, probs_N_K):
+    def entropy(self, logprobs_N_K):
+        raise NotImplementedError()
+
+    def sample(self, logprobs_N_K):
+        raise NotImplementedError()
+
+    def kl_expr(self, logprobs1, logprobs2):
+        raise NotImplementedError()
+
+    def log_density_expr(self, dist_params, x):
         raise NotImplementedError()
 
 
@@ -28,6 +39,9 @@ class Categorical(Distribution):
     @property
     def dim(self):
         return self._dim
+
+    def log_density(self, dist_params_B_A, x_B_A):
+        return util.lookup_last_idx(dist_params_B_A, x_B_A)
 
     def entropy(self, probs_N_K):
         tmp = -probs_N_K * np.log(probs_N_K + TINY)
