@@ -80,12 +80,41 @@ def standardized(a):
     out /= a.std() + 1e-8
     return out
 
+
 def safezip(*ls):
     assert all(len(l) == len(ls[0]) for l in ls)
     return zip(*ls)
 
+
 def maxnorm(a):
     return np.abs(a).max()
+
+
+def gather(vals, idx):
+    return vals[idx]
+
+
+def lookup_last_idx(a, inds):
+    """
+    Looks up indices in a. e.g. a[[1, 2, 3]] = [a[1], a[2], a[3]]
+    a is a d1 x d2 ... dn array
+    inds is a d1 x d2 ... d(n-1) array of integers
+    returns the array
+    out[i_1,...,i_{n-1}] = a[i_1,...,i_{n-1}, inds[i_1,...,i_{n-1}]]
+    """
+
+    # Flatten the arrays
+    ashape, indsshape = np.shape(a), np.shape(inds)
+    aflat, indsflat = np.reshape(a, (-1,)), np.reshape(inds, (-1,))
+
+    # Compute the indices corresponding to inds in the flattened array
+    delta = gather(ashape, np.size(ashape)-1) # i.e. delta = ashape[-1],
+    aflatinds = np.arange(0, stop=np.size(a), step=delta) + indsflat
+
+    # Look up the desired elements in the flattened array, and reshape
+    # to the original shape
+    return np.reshape(gather(aflat, aflatinds), indsshape)
+
 
 class Color(object):
     HEADER = '\033[95m'

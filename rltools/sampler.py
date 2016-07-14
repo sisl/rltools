@@ -1,3 +1,6 @@
+import copy
+import random
+
 import numpy as np
 
 import util
@@ -105,6 +108,10 @@ class TrajBatch(object):
     def with_replaced_reward(self, new_r):
         new_trajs = [Trajectory(traj.obs_T_Do, traj.obsfeat_T_Df, traj.adist_T_Pa, traj.a_T_Da, traj_new_r) for traj, traj_new_r in util.safezip(self.trajs, new_r)]
         return TrajBatch(new_trajs, self.obs, self.obsfeat, self.adist, self.a, new_r, self.time)
+
+    def with_replaced_adist(self, new_adist):
+        new_trajs = [Trajectory(traj.obs_T_Do, traj.obsfeat_T_Df, traj_new_adist, traj.a_T_Da, traj.r_T) for traj, traj_new_adist in util.safezip(self.trajs, new_adist)]
+        return TrajBatch(new_trajs, self.obs, self.obsfeat, new_adist, self.a, self.r, self.time)
 
     def __len__(self):
         return len(self.trajs)
@@ -305,14 +312,23 @@ class BatchSampler(Sampler):
 
 class ImportanceWeightedSampler(SimpleSampler):
     """Alternate between sampling iterations using simple sampler and importance sampling iterations"""
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False, n_backtrack='all'):
+    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False,
+                 n_backtrack='all', randomize_draw=False, n_pretrain=0, skip_is=False, max_is_ratio=0):
         """
         n_backtrack: number of past policies to update from
+        n_pretrain: iteration number until which to only do importance sampling
+        skip_is: whether to skip doing alternate importance sampling after pretraining
+        max_is_ratio: maximum importance sampling ratio (thresholding)
         """
         self.n_backtrack = n_backtrack
+        self.randomize_draw = randomize_draw
+        self.n_pretrain = n_pretrain
+        self.skip_is = skip_is
+        self.max_is_ratio = max_is_ratio
         self._hist = []
         self._is_itr = 0
         super(ImportanceWeightedSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
+        assert not self.adaptive, "Can't use adaptive sampling with importance weighted for now" # TODO needed?
 
     @property
     def history(self):
@@ -325,36 +341,75 @@ class ImportanceWeightedSampler(SimpleSampler):
         if n_past == 'all':
             return self.history
         assert isinstance(n_past, int)
-        return self.history[-min(n_past, len(self.history))]
+        return self.history[-min(n_past, len(self.history)):]
 
     def sample(self, sess, itr):
+        # Importance sampling for first few iterations
+        if itr < self.n_pretrain:
+            trajbatch = self.is_sample(sess, itr)
+            return trajbatch
+
         # Alternate between importance sampling and actual sampling
         # Data logs will be messy TODO
-        if self._is_itr:
-            trajbatch = self.is_sample(sess, itr)
+        if self._is_itr and not self.skip_is:
+            trajbatch, batch_info = self.is_sample(sess, itr)
         else:
-            trajbatch = super(ImportanceWeightedSampler, self).sample(sess, itr)
-            self.add_history(trajbatch)
+            trajbatch, batch_info = super(ImportanceWeightedSampler, self).sample(sess, itr)
+            if not self.skip_is:
+                self.add_history(trajbatch)
 
         self._is_itr = (self._is_itr + 1) % 2
 
-        return trajbatch
+        return trajbatch, batch_info
 
-    def is_sample(self, sess, itr, randomize_draw=True):
+    def is_sample(self, sess, itr):
+        rettrajs = []
         for hist_trajbatch in self.get_history(self.n_backtrack):
             n_trajs = len(hist_trajbatch)
             n_samples = min(n_trajs, self.batch_size)
 
-            if randomize_draw:
-                import random
+            if self.randomize_draw:
                 samples = random.sample(hist_trajbatch, n_samples)
             elif hist_trajbatch:
-                samples = hist_trajbatch[:n_samples]
+                # Random start
+                start = random.randint(0, n_trajs-n_samples)
+                samples = hist_trajbatch[start:start+n_samples]
 
-            import copy
             samples = copy.deepcopy(samples) # Avoid overwriting
-            # TODO
-            # Calculate loglikelihoods of current policy actions and history actions
-            # importance ratio = np.exp(curr_log_like - hist_log_like)
-            # multiply rewards in samples by importance ratio
-            # return samples
+
+
+            for traj in samples:
+                # What the current policy would have done
+                _, adist_T_Pa = self.algo.policy.sample_actions(sess, traj.obsfeat_T_Df)
+                # What the older policy did
+                hist_adist_T_Pa = traj.adist_T_Pa
+
+                assert traj.adist_T_Pa.shape == adist_T_Pa.shape
+                # Use newer policy distribution
+                traj.adist_T_Pa = adist_T_Pa
+
+                # Log probabilities of actions using previous and current
+                logprob_curr = self.algo.policy.distribution.log_density(adist_T_Pa, traj.a_T_Da)
+                logprob_hist = self.algo.policy.distribution.log_density(hist_adist_T_Pa, traj.a_T_Da)
+                # Importance sampling ratio
+                is_ratio = np.exp(logprob_curr.sum() - logprob_hist.sum())
+
+                # Thresholding
+                if self.max_is_ratio > 0:
+                    is_ratio = min(is_ratio, self.max_is_ratio)
+
+                # Weight the rewards accordingly
+                traj.r_T *= is_ratio
+
+            rettrajs.extend(samples)
+        # Pack them back
+        if len(rettrajs) > self.batch_size:
+            rettrajs = random.sample(rettrajs, self.batch_size)
+        rettrajbatch = TrajBatch.FromTrajs(rettrajs)
+
+        batch_info = [('ret', rettrajbatch.r.padded(fill=0.).sum(axis=1).mean(), float), # average return for batch of traj
+                      ('avglen', int(np.mean([len(traj) for traj in rettrajbatch])), int), # average traj length
+                      ('ravg', rettrajbatch.r.stacked.mean(), int) # avg reward encountered per time step (probably not that useful)
+        ]
+
+        return rettrajbatch, batch_info
