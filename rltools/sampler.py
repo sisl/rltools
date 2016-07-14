@@ -251,11 +251,19 @@ class BatchSampler(Sampler):
 
 class ImportanceWeightedSampler(SimpleSampler):
     """Alternate between sampling iterations using simple sampler and importance sampling iterations"""
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False, n_backtrack='all'):
+    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False,
+                 n_backtrack='all', randomize_draw=False, n_pretrain=0, skip_is=False, max_is_ratio=0):
         """
         n_backtrack: number of past policies to update from
+        n_pretrain: iteration number until which to only do importance sampling
+        skip_is: whether to skip doing alternate importance sampling after pretraining
+        max_is_ratio: maximum importance sampling ratio (thresholding)
         """
         self.n_backtrack = n_backtrack
+        self.randomize_draw = randomize_draw
+        self.n_pretrain = 0
+        self.skip_is = skip_is
+        self.max_is_ratio = max_is_ratio
         self._hist = []
         self._is_itr = 0
         super(ImportanceWeightedSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
@@ -272,33 +280,45 @@ class ImportanceWeightedSampler(SimpleSampler):
         if n_past == 'all':
             return self.history
         assert isinstance(n_past, int)
-        return self.history[-min(n_past, len(self.history))]
+        return self.history[-min(n_past, len(self.history)):]
 
     def sample(self, sess, itr):
+        # Importance sampling for first few iterations
+        if itr < self.n_pretrain:
+            trajbatch = self.is_sample(sess, itr)
+            return trajbatch
+
         # Alternate between importance sampling and actual sampling
         # Data logs will be messy TODO
-        if self._is_itr:
+        if self._is_itr and not self.skip_is:
             trajbatch = self.is_sample(sess, itr)
         else:
             trajbatch = super(ImportanceWeightedSampler, self).sample(sess, itr)
-            self.add_history(trajbatch)
+            if not self.skip_is:
+                self.add_history(trajbatch)
 
         self._is_itr = (self._is_itr + 1) % 2
 
         return trajbatch
 
-    def is_sample(self, sess, itr, randomize_draw=True):
+    def is_sample(self, sess, itr):
         rettrajs = []
         for hist_trajbatch in self.get_history(self.n_backtrack):
             n_trajs = len(hist_trajbatch)
             n_samples = min(n_trajs, self.batch_size)
 
-            if randomize_draw:
+            if self.randomize_draw:
                 samples = random.sample(hist_trajbatch, n_samples)
             elif hist_trajbatch:
-                samples = hist_trajbatch[:n_samples]
+                # Random start
+                start = random.randint(0, n_trajs-n_samples)
+                samples = hist_trajbatch[start:start+n_samples]
 
             samples = copy.deepcopy(samples) # Avoid overwriting
+
+            if self.ess_threshold > 0:
+                is_weights = []
+
             for traj in samples:
                 # What the current policy would have done
                 _, adist_T_Pa = self.algo.policy.sample_actions(sess, traj.obsfeat_T_Df)
@@ -313,10 +333,15 @@ class ImportanceWeightedSampler(SimpleSampler):
                 logprob_hist = self.algo.policy.distribution.log_density(hist_adist_T_Pa, traj.a_T_Da)
                 # Importance sampling ratio
                 is_ratio = np.exp(logprob_curr.sum() - logprob_hist.sum())
+                
+                # Thresholding
+                if self.max_is_ratio > 0:
+                    is_ratio = min(is_ratio, self.max_is_ratio)
+
                 # Weight the rewards accordingly
                 traj.r_T *= is_ratio
 
-            rettrajs.append(samples)
+            rettrajs.extend(samples)
         # Pack them back
         rettrajbatch = TrajBatch.FromTrajs(rettrajs)
         if len(rettrajbatch) > self.batch_size:
