@@ -15,7 +15,7 @@ import pandas as pd
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('logfiles', type=str, nargs='+')
-    parser.add_argument('--fields', type=str, default='ret,avglen,ent,kl,vf_r2')
+    parser.add_argument('--fields', type=str, default='ret,avglen,ent,kl,vf_r2,ttotal')
     parser.add_argument('--noplot', action='store_true')
     parser.add_argument('--plotfile', type=str, default=None)
     parser.add_argument('--range_end', type=int, default=None)
@@ -39,7 +39,7 @@ def main():
         import matplotlib
         if args.plotfile is not None:
             matplotlib.use('Agg')
-        import matplotlib.pyplot as plt; plt.style.use('ggplot')
+        import matplotlib.pyplot as plt; plt.style.use('seaborn-colorblind')
 
         ax = None
         for fname, df in fname2log.items():
@@ -50,9 +50,9 @@ def main():
             df['vf_r2'] = np.maximum(0, df['vf_r2'])
 
             if ax is None:
-                ax = df.plot(subplots=True, title=fname)
+                ax = df.plot(subplots=True, title=','.join(args.logfiles))
             else:
-                df.plot(subplots=True, title=fname, ax=ax, legend=False)
+                df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
 
 
         if not args.noplot:
