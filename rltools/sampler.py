@@ -194,6 +194,7 @@ class Sampler(object):
         raise NotImplementedError()
 
 
+
 class SimpleSampler(Sampler):
     def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False):
         super(SimpleSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
@@ -231,6 +232,62 @@ class SimpleSampler(Sampler):
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])), int), # average traj length
                  ('ravg', trajbatch.r.stacked.mean(), int) # avg reward encountered per time step (probably not that useful)
                 ])
+
+
+class DecSampler(Sampler):
+    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False):
+        super(DecSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
+
+    def sample(self, sess, itr):
+        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
+            if itr % self.batch_rate == 0:
+                self.batch_size *= 2
+        def get_lists(nl, na):
+            l = []
+            for i in xrange(nl):
+                l.append([[] for j in xrange(na)])
+            return l
+    
+        env = self.algo.env
+        trajs = []
+        for _ in xrange(self.batch_size / env.n_agents()): #FIXME: batch size depends on number of agents
+            old_ob = env.reset()
+            n_total = env.n_agents()
+            obs, obsfeat, actions, actiondists, rewards = get_lists(5, n_total)
+            for itr in xrange(self.max_traj_len):
+                agent_actions = []
+                n = env.n_agents()
+                for i, agent_obs in enumerate(old_ob):
+                    if agent_obs is None: continue
+                    obs[i].append(np.expand_dims(agent_obs,0))
+                    obsfeat[i].append(self.algo.obsfeat_fn(obs[i][-1]))
+                    a, adist = self.algo.policy.sample_actions(sess, obsfeat[i][-1])
+                    agent_actions.append(a)
+                    actions[i].append(a)
+                    actiondists[i].append(adist)
+                new_ob, r, done, _ = env.step(np.array(agent_actions)[:,0,0]) #FIXME
+                for i, o in enumerate(old_ob): 
+                    if o is None: continue
+                    rewards[i].append(r)
+                old_ob = new_ob
+                if done:
+                    break
+
+            for agnt in xrange(n_total):
+                obs_T_Do = np.concatenate(obs[agnt])
+                obsfeat_T_Df = np.concatenate(obsfeat[agnt])
+                adist_T_Pa = np.concatenate(actiondists[agnt])
+                a_T_Da = np.concatenate(actions[agnt])
+                r_T = np.asarray(rewards[agnt])
+                trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
+
+        trajbatch = TrajBatch.FromTrajs(trajs)
+        return (trajbatch,
+                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(), float), # average return for batch of traj
+                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])), int), # average traj length
+                 ('ravg', trajbatch.r.stacked.mean(), int) # avg reward encountered per time step (probably not that useful)
+                ])
+
 
 
 class BatchSampler(Sampler):

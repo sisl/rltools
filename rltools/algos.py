@@ -4,6 +4,7 @@ import optim
 import util
 from policy import StochasticPolicy
 from sampler import SimpleSampler
+from sampler import DecSampler
 
 
 class Algorithm(object):
@@ -22,6 +23,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                  store_paths=False, whole_paths=True,
                  max_traj_len=200, batch_size=32,
                  adaptive_batch=False, min_batch_size=4, max_batch_size=64, batch_rate=40,
+                 decentralized=False,
                  **kwargs):
         self.env = env
         self.policy = policy
@@ -37,7 +39,10 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         self.store_paths = store_paths
         self.whole_paths = whole_paths
         # TODO: variable batch_size
-        self.sampler = SimpleSampler(self, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive_batch)
+        if decentralized:
+            self.sampler = DecSampler(self, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive_batch)
+        else:
+            self.sampler = SimpleSampler(self, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive_batch)
         self.total_time = 0.0
 
     def train(self, sess, log, save_freq):
