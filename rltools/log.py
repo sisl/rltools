@@ -33,7 +33,7 @@ class TrainingLog(object):
 
     Stores diagnostics numbers as well as model snapshots
     """
-    def __init__(self, filename, attrs):
+    def __init__(self, filename, attrs, debug=True):
         if filename is None:
             util.warn('WARNING: not writing to any file')
             self.f = None
@@ -46,6 +46,7 @@ class TrainingLog(object):
             self.log_table = None
 
         self.schema = None      # list of col name / types for display
+        self.debug = debug
 
     def close(self):
         if self.f is not None: self.f.close()
@@ -77,7 +78,7 @@ class TrainingLog(object):
                     else:
                         nonefilled_kvt.append((schema_k, None, schema_t))
                 kvt = nonefilled_kvt
-            _printfields(kvt, **kwargs)
+            if self.debug: _printfields(kvt, **kwargs)
 
     def write_snapshot(self, sess, model, key_iter):
         if self.f is None: return
