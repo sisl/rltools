@@ -109,6 +109,10 @@ class TrajBatch(object):
         new_trajs = [Trajectory(traj.obs_T_Do, traj.obsfeat_T_Df, traj.adist_T_Pa, traj.a_T_Da, traj_new_r) for traj, traj_new_r in util.safezip(self.trajs, new_r)]
         return TrajBatch(new_trajs, self.obs, self.obsfeat, self.adist, self.a, new_r, self.time)
 
+    def with_replaced_adist(self, new_adist):
+        new_trajs = [Trajectory(traj.obs_T_Do, traj.obsfeat_T_Df, traj_new_adist, traj.a_T_Da, traj.r_T) for traj, traj_new_adist in util.safezip(self.trajs, new_adist)]
+        return TrajBatch(new_trajs, self.obs, self.obsfeat, new_adist, self.a, self.r, self.time)
+
     def __len__(self):
         return len(self.trajs)
 
@@ -261,7 +265,7 @@ class ImportanceWeightedSampler(SimpleSampler):
         """
         self.n_backtrack = n_backtrack
         self.randomize_draw = randomize_draw
-        self.n_pretrain = 0
+        self.n_pretrain = n_pretrain
         self.skip_is = skip_is
         self.max_is_ratio = max_is_ratio
         self._hist = []
@@ -291,15 +295,15 @@ class ImportanceWeightedSampler(SimpleSampler):
         # Alternate between importance sampling and actual sampling
         # Data logs will be messy TODO
         if self._is_itr and not self.skip_is:
-            trajbatch = self.is_sample(sess, itr)
+            trajbatch, batch_info = self.is_sample(sess, itr)
         else:
-            trajbatch = super(ImportanceWeightedSampler, self).sample(sess, itr)
+            trajbatch, batch_info = super(ImportanceWeightedSampler, self).sample(sess, itr)
             if not self.skip_is:
                 self.add_history(trajbatch)
 
         self._is_itr = (self._is_itr + 1) % 2
 
-        return trajbatch
+        return trajbatch, batch_info
 
     def is_sample(self, sess, itr):
         rettrajs = []
@@ -316,15 +320,14 @@ class ImportanceWeightedSampler(SimpleSampler):
 
             samples = copy.deepcopy(samples) # Avoid overwriting
 
-            if self.ess_threshold > 0:
-                is_weights = []
 
             for traj in samples:
                 # What the current policy would have done
                 _, adist_T_Pa = self.algo.policy.sample_actions(sess, traj.obsfeat_T_Df)
                 # What the older policy did
                 hist_adist_T_Pa = traj.adist_T_Pa
-                assert traj.adist_T_Pa.shape == adist_T_Pa
+
+                assert traj.adist_T_Pa.shape == adist_T_Pa.shape
                 # Use newer policy distribution
                 traj.adist_T_Pa = adist_T_Pa
 
@@ -333,7 +336,7 @@ class ImportanceWeightedSampler(SimpleSampler):
                 logprob_hist = self.algo.policy.distribution.log_density(hist_adist_T_Pa, traj.a_T_Da)
                 # Importance sampling ratio
                 is_ratio = np.exp(logprob_curr.sum() - logprob_hist.sum())
-                
+
                 # Thresholding
                 if self.max_is_ratio > 0:
                     is_ratio = min(is_ratio, self.max_is_ratio)
@@ -346,4 +349,10 @@ class ImportanceWeightedSampler(SimpleSampler):
         rettrajbatch = TrajBatch.FromTrajs(rettrajs)
         if len(rettrajbatch) > self.batch_size:
             rettrajbatch = random.sample(rettrajbatch, self.batch_size)
-        return rettrajbatch
+
+        batch_info = [('ret', rettrajbatch.r.padded(fill=0.).sum(axis=1).mean(), float), # average return for batch of traj
+                      ('avglen', int(np.mean([len(traj) for traj in rettrajbatch])), int), # average traj length
+                      ('ravg', rettrajbatch.r.stacked.mean(), int) # avg reward encountered per time step (probably not that useful)
+        ]
+
+        return rettrajbatch, batch_info
