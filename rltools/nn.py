@@ -133,10 +133,11 @@ class ConvLayer(Layer):
         self._output_shape = (Oh, Ow, Co)
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if initializer is None:
-                initializer = tf.truncated_normal_initializer(mean=0., stddev=np.sqrt(2./(Fh*Fw*Ci)))
-                self.W_Fh_Fw_Ci_Co = tf.get_variable('W', shape=[Fh, Fw, Ci, Co], initializer=initializer)
-                self.b_1_1_1_Co = tf.get_variable('b', shape=[1, 1, 1, Co], initializer=tf.constant_initializer(0.))
-                self.output_B_Oh_Ow_Co = tf.nn.conv2d(input_B_Ih_Iw_Ci, self.W_Fh_Fw_Ci_Co, [1, Sh, Sw, 1], padding) + self.b_1_1_1_Co
+                # initializer = tf.truncated_normal_initializer(mean=0., stddev=np.sqrt(2./(Fh*Fw*Ci)))
+                initializer = tf.contrib.layers.xavier_initializer()
+            self.W_Fh_Fw_Ci_Co = tf.get_variable('W', shape=[Fh, Fw, Ci, Co], initializer=initializer)
+            self.b_1_1_1_Co = tf.get_variable('b', shape=[1, 1, 1, Co], initializer=tf.constant_initializer(0.))
+            self.output_B_Oh_Ow_Co = tf.nn.conv2d(input_B_Ih_Iw_Ci, self.W_Fh_Fw_Ci_Co, [1, Sh, Sw, 1], padding) + self.b_1_1_1_Co
     @property
     def output(self): return self.output_B_Oh_Ow_Co
     @property
