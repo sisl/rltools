@@ -45,11 +45,11 @@ class ZeroBaseline(Baseline):
 
 
 class LinearFeatureBaseline(Baseline):
-    def __init__(self, obsfeat_space, enable_obsnorm, reg_coeff=1e-5, name='linear'):
+    def __init__(self, obsfeat_space, enable_obsnorm, reg_coeff=1e-5, varscope_name='linear'):
         super(LinearFeatureBaseline, self).__init__(obsfeat_space)
         self.w_Df = None
         self._reg_coeff = reg_coeff
-        with tf.variable_scope(name+'_obsnorm'):
+        with tf.variable_scope(varscope_name+'_obsnorm'):
             self.obsnorm = (nn.Standardizer if enable_obsnorm else nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
 
     def get_params(self):

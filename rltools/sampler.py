@@ -246,6 +246,8 @@ class DecSampler(Sampler):
         super(DecSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
 
     def sample(self, sess, itr):
+        assert self.batch_size >= self.algo.env.n_agents(), 'Batch size should be at least as large as number of agents'
+        assert self.batch_size % self.algo.env.n_agents() == 0, 'Batch size should be evenly divisible by number of agents'
         if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
             if itr % self.batch_rate == 0:
                 self.batch_size *= 2
