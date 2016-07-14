@@ -346,9 +346,9 @@ class ImportanceWeightedSampler(SimpleSampler):
 
             rettrajs.extend(samples)
         # Pack them back
+        if len(rettrajs) > self.batch_size:
+            rettrajs = random.sample(rettrajs, self.batch_size)
         rettrajbatch = TrajBatch.FromTrajs(rettrajs)
-        if len(rettrajbatch) > self.batch_size:
-            rettrajbatch = random.sample(rettrajbatch, self.batch_size)
 
         batch_info = [('ret', rettrajbatch.r.padded(fill=0.).sum(axis=1).mean(), float), # average return for batch of traj
                       ('avglen', int(np.mean([len(traj) for traj in rettrajbatch])), int), # average traj length
