@@ -260,10 +260,10 @@ class Standardizer(Model):
         num = points_N_D.shape[0]
         count = self.get_count(sess)
         a = count/(count+num)
-        mean_ass = self._mean_1_D.assign(a*self.get_mean(sess) + (1.-a)*points_N_D.mean(axis=0, keepdims=True))
-        meansq_assign = self._meansq_1_D.assign(a*self.get_meansq(sess) + (1.-a)*(points_N_D**2).mean(axis=0, keepdims=True))
-        count_assign = self._count.assign(count+num)
-        sess.run([mean_ass, meansq_assign, count_assign])
+        mean_op = self._mean_1_D.assign(a*self.get_mean(sess) + (1.-a)*points_N_D.mean(axis=0, keepdims=True))
+        meansq_op = self._meansq_1_D.assign(a*self.get_meansq(sess) + (1.-a)*(points_N_D**2).mean(axis=0, keepdims=True))
+        count_op = self._count.assign(count+num)
+        sess.run([mean_op, meansq_op, count_op])
 
     def standardize_expr(self, x_B_D):
         return (x_B_D - self._mean_1_D) / (self._stdev_1_D + self._eps)
@@ -271,13 +271,19 @@ class Standardizer(Model):
     def unstandardize_expr(self, y_B_D):
         return y_B_D*(self._stdev_1_D + self._eps) + self._mean_1_D
 
-    def standardize(self, sess, x_B_D):
+    def standardize(self, sess, x_B_D, centered=True):
         assert x_B_D.ndim == 2
-        return (x_B_D - self.get_mean(sess))/ (self.get_stdev(sess) + self._eps)
+        mu = 0.
+        if centered:
+            mu = self.get_mean(sess)
+        return (x_B_D - mu)/ (self.get_stdev(sess) + self._eps)
 
-    def unstandardize(self, sess, y_B_D):
+    def unstandardize(self, sess, y_B_D, centered=True):
         assert y_B_D.ndim == 2
-        return y_B_D*(self.get_mean(sess) + self._eps) + self.get_mean(sess)
+        mu = 0.
+        if centered:
+            mu = self.get_mean(sess)
+        return y_B_D*(mu + self._eps) + mu
 
 
 def test_standardizer():
