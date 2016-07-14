@@ -39,7 +39,7 @@ class StochasticPolicy(Policy):
         with tf.variable_scope(varscope_name) as self.varscope:
             batch_size = None
             # Action distribution for current policy
-            self._obsfeat_B_Df = tf.placeholder(tf.float32, [batch_size, self.obsfeat_space.shape[0]], name='obsfeat_B_Df') # Df = feature dimensions FIXME shape
+            self._obsfeat_B_Df = tf.placeholder(tf.float32, list((batch_size,) + self.obsfeat_space.shape), name='obsfeat_B_Df') # Df = feature dimensions FIXME shape
             with tf.variable_scope('obsnorm'):
                 self.obsnorm = (nn.Standardizer if enable_obsnorm else nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
             self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
@@ -83,9 +83,6 @@ class StochasticPolicy(Policy):
             self._ngstep = optim.make_ngstep_func(self, compute_obj_kl=self.compute_reinfobj_kl,
                                          compute_obj_kl_with_grad=self.compute_reinfobj_kl_with_grad,
                                          compute_hvp_helper=self.compute_klgrad)
-
-            # # Check
-            # self._check_numerics = tf.add_check_numeric_ops()
 
             # Writing params
             self._flatparams_P = tf.placeholder(tf.float32, [self._num_params], name='flatparams_P')

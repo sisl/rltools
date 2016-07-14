@@ -133,10 +133,11 @@ class ConvLayer(Layer):
         self._output_shape = (Oh, Ow, Co)
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if initializer is None:
-                initializer = tf.truncated_normal_initializer(mean=0., stddev=np.sqrt(2./(Fh*Fw*Ci)))
-                self.W_Fh_Fw_Ci_Co = tf.get_variable('W', shape=[Fh, Fw, Ci, Co], initializer=initializer)
-                self.b_1_1_1_Co = tf.get_variable('b', shape=[1, 1, 1, Co], initializer=tf.constant_initializer(0.))
-                self.output_B_Oh_Ow_Co = tf.nn.conv2d(input_B_Ih_Iw_Ci, self.W_Fh_Fw_Ci_Co, [1, Sh, Sw, 1], padding) + self.b_1_1_1_Co
+                # initializer = tf.truncated_normal_initializer(mean=0., stddev=np.sqrt(2./(Fh*Fw*Ci)))
+                initializer = tf.contrib.layers.xavier_initializer()
+            self.W_Fh_Fw_Ci_Co = tf.get_variable('W', shape=[Fh, Fw, Ci, Co], initializer=initializer)
+            self.b_1_1_1_Co = tf.get_variable('b', shape=[1, 1, 1, Co], initializer=tf.constant_initializer(0.))
+            self.output_B_Oh_Ow_Co = tf.nn.conv2d(input_B_Ih_Iw_Ci, self.W_Fh_Fw_Ci_Co, [1, Sh, Sw, 1], padding) + self.b_1_1_1_Co
     @property
     def output(self): return self.output_B_Oh_Ow_Co
     @property
@@ -260,10 +261,10 @@ class Standardizer(Model):
         num = points_N_D.shape[0]
         count = self.get_count(sess)
         a = count/(count+num)
-        mean_ass = self._mean_1_D.assign(a*self.get_mean(sess) + (1.-a)*points_N_D.mean(axis=0, keepdims=True))
-        meansq_assign = self._meansq_1_D.assign(a*self.get_meansq(sess) + (1.-a)*(points_N_D**2).mean(axis=0, keepdims=True))
-        count_assign = self._count.assign(count+num)
-        sess.run([mean_ass, meansq_assign, count_assign])
+        mean_op = self._mean_1_D.assign(a*self.get_mean(sess) + (1.-a)*points_N_D.mean(axis=0, keepdims=True))
+        meansq_op = self._meansq_1_D.assign(a*self.get_meansq(sess) + (1.-a)*(points_N_D**2).mean(axis=0, keepdims=True))
+        count_op = self._count.assign(count+num)
+        sess.run([mean_op, meansq_op, count_op])
 
     def standardize_expr(self, x_B_D):
         return (x_B_D - self._mean_1_D) / (self._stdev_1_D + self._eps)
@@ -271,13 +272,19 @@ class Standardizer(Model):
     def unstandardize_expr(self, y_B_D):
         return y_B_D*(self._stdev_1_D + self._eps) + self._mean_1_D
 
-    def standardize(self, sess, x_B_D):
+    def standardize(self, sess, x_B_D, centered=True):
         assert x_B_D.ndim == 2
-        return (x_B_D - self.get_mean(sess))/ (self.get_stdev(sess) + self._eps)
+        mu = 0.
+        if centered:
+            mu = self.get_mean(sess)
+        return (x_B_D - mu)/ (self.get_stdev(sess) + self._eps)
 
-    def unstandardize(self, sess, y_B_D):
+    def unstandardize(self, sess, y_B_D, centered=True):
         assert y_B_D.ndim == 2
-        return y_B_D*(self.get_mean(sess) + self._eps) + self.get_mean(sess)
+        mu = 0.
+        if centered:
+            mu = self.get_mean(sess)
+        return y_B_D*(mu + self._eps) + mu
 
 
 def test_standardizer():
