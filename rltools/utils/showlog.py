@@ -49,13 +49,12 @@ def main():
 
         df['vf_r2'] = np.maximum(0, df['vf_r2'])
 
+    if not args.noplot:
         if ax is None:
             ax = df.plot(subplots=True, title=','.join(args.logfiles))
         else:
             df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
 
-
-    if not args.noplot:
         plt.show()
     if args.plotfile is not None:
         plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
