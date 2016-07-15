@@ -68,7 +68,7 @@ class Model(object):
 
             h = self.savehash(sess)
             # FIXME assert fails for continuous
-            # assert h == dset.attrs['hash'], 'Checkpoint hash {} does not match loaded hash {}'.format(dset.attrs['hash'], h)
+            assert h == dset.attrs['hash'], 'Checkpoint hash {} does not match loaded hash {}'.format(dset.attrs['hash'], h)
 
 # Layers for feedforward networks
 
