@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import numpy as np
 import tensorflow as tf
 
+from gym import spaces
 import nn
 import optim
 import util
@@ -38,13 +39,21 @@ class StochasticPolicy(Policy):
 
         with tf.variable_scope(varscope_name) as self.varscope:
             batch_size = None
+            if isinstance(action_space, spaces.Discrete):
+                action_type = tf.int32
+                action_dim = 1
+            elif isinstance(action_space, spaces.Box):
+                action_type = tf.float32
+                action_dim = self.action_space.shape[0]
+            else:
+                raise NotImplementedError()
             # Action distribution for current policy
             self._obsfeat_B_Df = tf.placeholder(tf.float32, list((batch_size,) + self.obsfeat_space.shape), name='obsfeat_B_Df') # Df = feature dimensions FIXME shape
             with tf.variable_scope('obsnorm'):
                 self.obsnorm = (nn.Standardizer if enable_obsnorm else nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
             self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
             self._actiondist_B_Pa = self._make_actiondist_ops(self._normalized_obsfeat_B_Df) # Pa = action distribution params
-            self._input_action_B_Da = tf.placeholder(tf.int32, [batch_size, 1], name='input_actions_B_Da') # Action dims FIXME type
+            self._input_action_B_Da = tf.placeholder(action_type, [batch_size, action_dim], name='input_actions_B_Da') # Action dims FIXME type
             self._logprobs_B = self._make_actiondist_logprobs_ops(self._actiondist_B_Pa, self._input_action_B_Da)
 
             # proposal distribution from old policy

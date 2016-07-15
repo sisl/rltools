@@ -220,7 +220,7 @@ class SimpleSampler(Sampler):
                 a, adist = self.algo.policy.sample_actions(sess, obsfeat[-1])
                 actions.append(a)
                 actiondists.append(adist)
-                o2, r, done, _ = self.algo.env.step(actions[-1][0,0]) # FIXME
+                o2, r, done, _ = self.algo.env.step(actions[-1]) # FIXME
                 rewards.append(r)
                 if done:
                     break
@@ -230,7 +230,7 @@ class SimpleSampler(Sampler):
             obs_T_Do = np.concatenate(obs); assert obs_T_Do.shape[0] == len(obs), '{} != {}'.format(obs_T_Do.shape, len(obs))
             obsfeat_T_Df = np.concatenate(obsfeat); assert obsfeat_T_Df.shape[0] == len(obs), '{} != {}'.format(obsfeat_T_Df.shape, len(obs))
             adist_T_Pa = np.concatenate(actiondists); assert adist_T_Pa.ndim == 2 and adist_T_Pa.shape[0] == len(obs)
-            a_T_Da = np.concatenate(actions); assert a_T_Da.shape == (len(obs), 1)
+            a_T_Da = np.concatenate(actions); assert a_T_Da.shape[0] == len(obs)
             r_T = np.asarray(rewards); assert r_T.shape == (len(obs),)
             trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
         trajbatch = TrajBatch.FromTrajs(trajs)
@@ -313,7 +313,12 @@ class BatchSampler(Sampler):
 
 
 class ImportanceWeightedSampler(SimpleSampler):
-    """Alternate between sampling iterations using simple sampler and importance sampling iterations"""
+    """
+    Alternate between sampling iterations using simple sampler and importance sampling iterations
+
+    Does not work with a NN value function baseline
+    """
+
     def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive=False,
                  n_backtrack='all', randomize_draw=False, n_pretrain=0, skip_is=False, max_is_ratio=0):
         """
