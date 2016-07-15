@@ -54,7 +54,7 @@ class Model(object):
                 for k, v in extra_attrs:
                     if k in dset.attrs:
                         util.warn('Warning: attribute {} already exists in {}'.format(k, dset.name))
-                        dset.attrs[k] = v
+                    dset.attrs[k] = v
 
     def load_h5(self, sess, h5file, key):
         with h5py.File(h5file, 'r') as f:
