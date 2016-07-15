@@ -183,6 +183,10 @@ class Sampler(object):
         vfunc_prediction_loss = np.var(q.stacked-v_stacked)
         vfunc_r2 = 1. - vfunc_prediction_loss/(constfunc_prediction_loss + 1e-8)
 
+        # XXX HACK
+        if vfunc_r2 < 0:
+            v = simplev
+
         # Compute advantage -- GAE(gamma,lambda) estimator
         v_B_T = v.padded(fill=0.)
         v_B_Tp1 = np.concatenate([v_B_T, np.zeros((self.batch_size,1))], axis=1); assert v_B_Tp1.shape == (self.batch_size, maxT+1)
@@ -256,7 +260,7 @@ class DecSampler(Sampler):
             for i in xrange(nl):
                 l.append([[] for j in xrange(na)])
             return l
-    
+
         env = self.algo.env
         trajs = []
         for _ in xrange(self.batch_size / env.n_agents()): #FIXME: batch size depends on number of agents
@@ -275,7 +279,7 @@ class DecSampler(Sampler):
                     actions[i].append(a)
                     actiondists[i].append(adist)
                 new_ob, r, done, _ = env.step(np.array(agent_actions)[:,0,0]) #FIXME
-                for i, o in enumerate(old_ob): 
+                for i, o in enumerate(old_ob):
                     if o is None: continue
                     rewards[i].append(r)
                 old_ob = new_ob
