@@ -61,6 +61,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                     trajbatch0, _ = self.sampler.sample(sess, itr)
                     self.policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
                     self.baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
+
                 trajbatch, sample_info_fields = self.sampler.sample(sess, itr)
 
             # Compute baseline
@@ -92,7 +93,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         return fields
 
 
-def TRPO(max_kl, subsample_hvp_frac=.25, damping=1e-2, grad_stop_tol=1e-6, max_cg_iter=10, enable_bt=True):
+def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg_iter=10, enable_bt=True):
 
     def trpo_step(sess, policy, params0_P, trajbatch, advantages):
         # standardize advantage

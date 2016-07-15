@@ -124,6 +124,7 @@ class MLPBaseline(Baseline, nn.Model):
                 out_layer = nn.AffineLayer(net.output, net.output_shape, (1,), initializer=tf.zeros_initializer)
                 assert out_layer.output_shape == (1,)
             self.val_B = out_layer.output[:,0]
+
         # Only code above has trainable vars
         self.param_vars = self.get_trainable_variables()
         self._num_params = self.get_num_params()
@@ -166,7 +167,6 @@ class MLPBaseline(Baseline, nn.Model):
                                             self.t_B_1: t_B[:, None],
                                             self.target_val_B: target_val_B,
                                             self.old_val_B: old_val_B })[0]
-
 
     def update_obsnorm(self, sess, obs_B_Do):
         """Update norms using moving avg"""
