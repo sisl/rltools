@@ -50,7 +50,6 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             log.write(iter_info, print_header=itr % 20 == 0)
             if itr % save_freq == 0:
                 log.write_snapshot(sess, self.policy, itr)
-                log.write_snapshot(sess, self.baseline, itr)
 
     def step(self, sess, itr):
         with util.Timer() as t_all:
