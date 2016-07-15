@@ -14,16 +14,16 @@ class Baseline(object):
     def __init__(self, obsfeat_space):
         self.obsfeat_space = obsfeat_space
 
-    def get_params(self):
+    def get_params(self, sess):
         raise NotImplementedError()
 
-    def set_params(self, val):
+    def set_params(self, sess, val):
         raise NotImplementedError()
 
-    def fit(self, trajs):
+    def fit(self, sess, trajs):
         raise NotImplementedError()
 
-    def predict(self, trajs):
+    def predict(self, sess, trajs):
         raise NotImplementedError()
 
     def update_obsnorm(self, sess, obs):
@@ -34,16 +34,16 @@ class ZeroBaseline(Baseline):
     def __init__(self, obsfeat_space):
         pass
 
-    def get_params(self):
+    def get_params(self, sess):
         return None
 
-    def set_params(self, val):
+    def set_params(self, sess, val):
         pass
 
-    def fit(self, trajs):
+    def fit(self, sess, trajs):
         return []
 
-    def predict(self, trajs):
+    def predict(self, sess, trajs):
         return np.zeros_like(trajs.r.stacked)
 
     def update_obsnorm(self, sess, obs):
@@ -58,10 +58,10 @@ class LinearFeatureBaseline(Baseline):
         with tf.variable_scope(varscope_name+'_obsnorm'):
             self.obsnorm = (nn.Standardizer if enable_obsnorm else nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
 
-    def get_params(self):
+    def get_params(self, sess):
         return self.w_Df
 
-    def set_params(self, vals):
+    def set_params(self, sess, vals):
         self.w_Df = vals
 
     def update_obsnorm(self, sess, obs_B_Do):
