@@ -26,6 +26,9 @@ class Baseline(object):
     def predict(self, trajs):
         raise NotImplementedError()
 
+    def update_obsnorm(self, sess, obs):
+        raise NotImplementedError()
+
 
 class ZeroBaseline(Baseline):
     def __init__(self, obsfeat_space):
@@ -42,6 +45,9 @@ class ZeroBaseline(Baseline):
 
     def predict(self, trajs):
         return np.zeros_like(trajs.r.stacked)
+
+    def update_obsnorm(self, sess, obs):
+        pass
 
 
 class LinearFeatureBaseline(Baseline):
