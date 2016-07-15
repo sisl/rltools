@@ -40,7 +40,7 @@ class ZeroBaseline(Baseline):
     def set_params(self, sess, val):
         pass
 
-    def fit(self, sess, trajs):
+    def fit(self, sess, trajs, qvals):
         return []
 
     def predict(self, sess, trajs):
