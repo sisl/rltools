@@ -41,24 +41,24 @@ def main():
             matplotlib.use('Agg')
         import matplotlib.pyplot as plt; plt.style.use('seaborn-colorblind')
 
-        ax = None
-        for fname, df in fname2log.items():
-            with pd.option_context('display.max_rows', 9999):
-                print(fname)
-                print(df[-1:])
+    ax = None
+    for fname, df in fname2log.items():
+        with pd.option_context('display.max_rows', 9999):
+            print(fname)
+            print(df[-1:])
 
-            df['vf_r2'] = np.maximum(0, df['vf_r2'])
+        df['vf_r2'] = np.maximum(0, df['vf_r2'])
 
-            if ax is None:
-                ax = df.plot(subplots=True, title=','.join(args.logfiles))
-            else:
-                df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
+        if ax is None:
+            ax = df.plot(subplots=True, title=','.join(args.logfiles))
+        else:
+            df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
 
 
-        if not args.noplot:
-            plt.show()
-        if args.plotfile is not None:
-            plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
+    if not args.noplot:
+        plt.show()
+    if args.plotfile is not None:
+        plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
 
 if __name__ == '__main__':
     main()
