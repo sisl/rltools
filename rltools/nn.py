@@ -28,8 +28,8 @@ class Model(object):
         return hashlib.sha1('|'.join('%s %s' for n, h in sorted([(name, hash_array(a)) for name, a in name2array]))).hexdigest()
 
     def savehash(self, sess):
-        """Hash is based on values of TRAINABLE variables only"""
-        vars_ = self.get_trainable_variables()
+        """Hash is based on values of variables"""
+        vars_ = self.get_variables()
         vals = sess.run(vars_)
         return self._hash_name2array([(v.name, val) for v, val in util.safezip(vars_, vals)])
 
@@ -43,7 +43,7 @@ class Model(object):
             else:
                 dset = f.create_group(key)
 
-            vs = self.get_trainable_variables()
+            vs = self.get_variables()
             vals = sess.run(vs)
 
             for v, val in util.safezip(vs, vals):
@@ -61,10 +61,14 @@ class Model(object):
             dset = f[key]
 
             ops = []
-            for v in self.get_trainable_variables():
+            for v in self.get_variables():
                 util.header('Reading {}'.format(v.name))
-                ops.append(v.assign(dset[v.name][...]))
-                sess.run(ops)
+                if v.name in dset:
+                    ops.append(v.assign(dset[v.name][...]))
+                else:
+                    raise RuntimeError('Variable {} not found in {}'.format(v.name, dset))
+
+            sess.run(ops)
 
             h = self.savehash(sess)
             # FIXME assert fails for continuous

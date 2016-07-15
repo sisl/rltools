@@ -86,7 +86,7 @@ class TrainingLog(object):
             util.warn("WARNING: trying to save a non NN model. Skipping...")
             return
         # Get var values
-        vs = model.get_trainable_variables()
+        vs = model.get_variables()
         vals = sess.run(vs)
 
         # Save all variables into this group
