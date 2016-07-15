@@ -148,6 +148,14 @@ class StochasticPolicy(Policy):
         actiondist_B_Pa = self.compute_action_dist_params(sess, obsfeat_B_Df)
         return self._sample_from_actiondist(actiondist_B_Pa, deterministic), actiondist_B_Pa
 
+    def deterministic_action(self, sess, obsfeat_B_Df):
+        """Return the argmax of distribution
+        """
+        actiondist_B_Pa = self.compute_action_dist_params(sess, obsfeat_B_Df)
+        a = self._sample_from_actiondist(actiondist_B_Pa, deterministic=True)
+        return a[0,0]
+
+
     def compute_action_logprobs(self, sess, obsfeat_B_Df, actions_B_Da):
         return sess.run(self._logprobs_B, {self._obsfeat_B_Df: obsfeat_B_Df,
                                            self._input_action_B_Da: actions_B_Da})
