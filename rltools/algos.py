@@ -70,7 +70,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             # Take the policy grad step
             with util.Timer() as t_step:
                 params0_P = self.policy.get_params(sess)
-                step_print_fields = self.step_func(sess, self.policy, params0_P, trajbatch, trajbatch_vals['advantage'])
+                step_print_fields = self.step_func(sess, self.policy, trajbatch, trajbatch_vals['advantage'])
                 self.policy.update_obsnorm(sess, trajbatch.obsfeat.stacked)
 
         # LOG
@@ -94,14 +94,15 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 
 def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg_iter=10, enable_bt=True):
 
-    def trpo_step(sess, policy, params0_P, trajbatch, advantages):
+    def trpo_step(sess, policy, trajbatch, advantages):
         # standardize advantage
         advstacked_N = util.standardized(advantages.stacked)
 
         # Compute objective, KL divergence and gradietns at init point
         feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked, advstacked_N)
 
-        step_info = policy._ngstep(sess, feed, max_kl=max_kl, damping=damping, subsample_hvp_frac=subsample_hvp_frac, grad_stop_tol=grad_stop_tol)
+        step_info = policy._ngstep(sess, feed, max_kl=max_kl, damping=damping,
+                                   subsample_hvp_frac=subsample_hvp_frac, grad_stop_tol=grad_stop_tol)
         return [
             ('dl', step_info.obj1-step_info.obj0, float), # Improvement in objective
             ('kl', step_info.kl1, float),                 # kl cost
