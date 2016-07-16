@@ -98,6 +98,7 @@ class TrainingLog(object):
             self.f.create_array(groupname, arrayname, val, createparents=True)
 
         # Store the model hash as an attribute
-        self.f.getNode(snapshot_root)._v_attrs.hash = model.savehash(sess)
+        model_root = snapshot_root + '/' + model.varscope.name
+        self.f.getNode(model_root)._v_attrs.hash = model.savehash(sess)
 
         self.f.flush()
