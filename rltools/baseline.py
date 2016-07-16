@@ -123,13 +123,7 @@ class MLPBaseline(Baseline, nn.Model):
             self.obsfeat_B_Df = tf.placeholder(tf.float32, [batch_size, self.obsfeat_space.shape[0]], name='obsfeat_B_Df') # FIXME shape
             self.t_B_1 = tf.placeholder(tf.float32, [batch_size,1], name='t_B')
             scaled_t_B_1 = self.t_B_1 * self.time_scale
-            net_input = tf.concat(1, [self.obsfeat_B_Df, scaled_t_B_1])
-            with tf.variable_scope('hidden'):
-                net = nn.FeedforwardNet(net_input, (self.obsfeat_space.shape[0]+1,), self.hidden_spec)
-            with tf.variable_scope('out'):
-                out_layer = nn.AffineLayer(net.output, net.output_shape, (1,), initializer=tf.zeros_initializer)
-                assert out_layer.output_shape == (1,)
-            self.val_B = out_layer.output[:,0]
+            self.val_B = self._make_val_op(self.obsfeat_B_Df, scaled_t_B_1)
 
         # Only code above has trainable vars
         self.param_vars = self.get_trainable_variables()
@@ -155,6 +149,15 @@ class MLPBaseline(Baseline, nn.Model):
         self._ngstep = optim.make_ngstep_func(self, compute_obj_kl=self.compute_obj_kl,
                                               compute_obj_kl_with_grad=self.compute_obj_kl_with_grad,
                                               compute_hvp_helper=self.compute_klgrad)
+
+    def _make_val_op(self, obsfeat_B_Df, scaled_t_B_1):
+        net_input = tf.concat(1, [self.obsfeat_B_Df, scaled_t_B_1])
+        with tf.variable_scope('hidden'):
+            net = nn.FeedforwardNet(net_input, (self.obsfeat_space.shape[0]+1,), self.hidden_spec)
+        with tf.variable_scope('out'):
+            out_layer = nn.AffineLayer(net.output, net.output_shape, (1,), initializer=tf.zeros_initializer)
+            assert out_layer.output_shape == (1,)
+        return out_layer.output[:,0]
 
     def compute_obj_kl(self, sess, obsfeat_B_Df, t_B, target_val_B, old_val_B):
         return sess.run([self.obj, self.kl], { self.obsfeat_B_Df: obsfeat_B_Df,
