@@ -1,18 +1,11 @@
+from __future__ import absolute_import, print_function
+
 import numpy as np
 
-import optim
-import util
-from policy import StochasticPolicy
-from sampler import SimpleSampler, ImportanceWeightedSampler, DecSampler
-
-
-class Algorithm(object):
-    pass
-
-
-class RLAlgorithm(Algorithm):
-    def train(self):
-        raise NotImplementedError()
+from rltools import optim, util
+from rltools.algos import RLAlgorithm
+from rltools.policy import StochasticPolicy
+from rltools.sampler import SimpleSampler
 
 
 class SamplingPolicyOptimizer(RLAlgorithm):
