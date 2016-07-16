@@ -2,7 +2,7 @@ from contextlib import contextmanager
 
 import tensorflow as tf
 
-from rltools import nn, optim, tfutil, util
+from rltools import nn, optim, tfutil
 from rltools.baselines import Baseline
 
 
@@ -62,7 +62,7 @@ class MLPBaseline(Baseline, nn.Model):
                                               compute_hvp_helper=self.compute_klgrad)
 
     def _make_val_op(self, obsfeat_B_Df, scaled_t_B_1):
-        net_input = tf.concat(1, [self.obsfeat_B_Df, scaled_t_B_1])
+        net_input = tf.concat(1, [obsfeat_B_Df, scaled_t_B_1])
         with tf.variable_scope('hidden'):
             net = nn.FeedforwardNet(net_input, (self.obsfeat_space.shape[0]+1,), self.hidden_spec)
         with tf.variable_scope('out'):
