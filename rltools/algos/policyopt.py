@@ -1,10 +1,8 @@
 from __future__ import absolute_import, print_function
 
-import numpy as np
-
 from rltools import optim, util
 from rltools.algos import RLAlgorithm
-from rltools.policy import StochasticPolicy
+from rltools.policy.stochastic import StochasticPolicy
 from rltools.sampler import SimpleSampler
 
 

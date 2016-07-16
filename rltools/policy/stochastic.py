@@ -1,36 +1,13 @@
+from __future__ import absolute_import, print_function
+
 from collections import namedtuple
 from contextlib import contextmanager
 
-import numpy as np
 import tensorflow as tf
-
 from gym import spaces
-import nn
-import optim
-import util
-import tfutil
 
-
-class Policy(nn.Model):
-    def __init__(self, observation_space, action_space):
-        self._observation_space = observation_space
-        self._action_space = action_space
-
-    def reset(self):
-        pass
-
-    @property
-    def obsfeat_space(self):
-        return self._observation_space
-
-    @property
-    def action_space(self):
-        return self._action_space
-
-    @property
-    def recurrent(self):
-        """Indicate whether the policy is recurrent"""
-        return False
+from rltools import nn, optim, tfutil, util
+from rltools.policy import Policy
 
 
 class StochasticPolicy(Policy):

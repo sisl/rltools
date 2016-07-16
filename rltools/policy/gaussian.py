@@ -1,10 +1,11 @@
+from __future__ import absolute_import, print_function
+
 import numpy as np
 import tensorflow as tf
 
-import nn
-import tfutil
-from policy import StochasticPolicy
-from distributions import Gaussian
+from rltools import nn, tfutil
+from rltools.distributions import Gaussian
+from rltools.policy.stochastic import StochasticPolicy
 
 
 class GaussianMLPPolicy(StochasticPolicy):

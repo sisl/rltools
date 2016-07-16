@@ -1,10 +1,11 @@
+from __future__ import absolute_import, print_function
+
 import numpy as np
 import tensorflow as tf
 
-import nn
-import tfutil
-from policy import StochasticPolicy
-from distributions import Categorical
+from rltools import nn, tfutil
+from rltools.distributions import Categorical, RecurrentCategorical
+from rltools.policy.stochastic import StochasticPolicy
 
 
 class CategoricalMLPPolicy(StochasticPolicy):
@@ -44,3 +45,22 @@ class CategoricalMLPPolicy(StochasticPolicy):
 
     def _compute_actiondist_entropy(self, actiondist_B_Pa):
         return self.distribution.entropy(np.exp(actiondist_B_Pa))
+
+
+class CategoricalGRUPolicy(StochasticPolicy):
+    def __init__(self, obsfeat_space, action_space,
+                 hidden_spec, enable_obsnorm, tblog, varscope_name, state_include_action=True):
+        self.hidden_spec = hidden_spec
+        self.state_include_action = state_include_action
+        self._dist = RecurrentCategorical(action_space.n)
+        super(CategoricalGRUPolicy, self).__init__(obsfeat_space, action_space,
+                                                   action_space.n, enable_obsnorm,
+                                                   tblog, varscope_name)
+
+    @property
+    def recurrent(self):
+        return True
+
+    @property
+    def distribution(self):
+        return self._dist
