@@ -1,3 +1,6 @@
+import copy
+import random
+
 import numpy as np
 
 from rltools.samplers import Sampler
