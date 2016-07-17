@@ -3,7 +3,7 @@ from __future__ import absolute_import, print_function
 from rltools import optim, util
 from rltools.algos import RLAlgorithm
 from rltools.policy.stochastic import StochasticPolicy
-from rltools.sampler import SimpleSampler
+from rltools.samplers.serial import SimpleSampler
 
 
 class SamplingPolicyOptimizer(RLAlgorithm):
