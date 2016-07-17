@@ -1,8 +1,8 @@
 import numpy as np
 import tensorflow as tf
 
-import tfutil
-import util
+from rltools import tfutil
+from rltools import util
 
 TINY = 1e-10
 
@@ -52,7 +52,7 @@ class Categorical(Distribution):
     def sample(self, probs_N_K):
         """Sample from N categorical distributions, each over K outcomes"""
         N, K = probs_N_K.shape
-        return np.array([np.random.choice(K, p=probs_N_K[i, :]) for i in xrange(N)])
+        return np.array([np.random.choice(K, p=probs_N_K[i, :]) for i in range(N)])
 
     def kl_expr(self, logprobs1_B_A, logprobs2_B_A, name=None):
         """KL divergence between categorical distributions, specified as log probabilities"""
