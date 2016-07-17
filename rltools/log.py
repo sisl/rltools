@@ -3,8 +3,7 @@ import os
 import tableprint
 import tables
 
-import nn
-import util
+from rltools import nn, util
 
 
 def _printfields(fields, print_header=True):

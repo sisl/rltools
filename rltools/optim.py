@@ -3,9 +3,7 @@ from collections import namedtuple
 import numpy as np
 import scipy.sparse.linalg as ssl
 
-import nn
-import tfutil
-import util
+from rltools import nn, tfutil, util
 
 
 def btlinesearch(f, x0, fx0, g, dx, accept_ratio, shrink_factor, max_steps, verbose=False):

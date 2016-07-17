@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import tensorflow as tf
 
-import util
+from rltools import util
 
 
 class Model(object):
@@ -289,5 +289,3 @@ class Standardizer(Model):
         if centered:
             mu = self.get_mean(sess)
         return y_B_D*(mu + self._eps) + mu
-
-

@@ -1,8 +1,7 @@
 import numpy as np
 import tensorflow as tf
 
-import util
-
+from rltools import util
 
 
 def logsumexp(a, axis, name=None):
