@@ -9,8 +9,8 @@ import numpy as np
 from colorama import Fore, Style
 
 
-
 class Timer(object):
+
     def __enter__(self):
         self.t_start = timeit.default_timer()
         return self
@@ -30,7 +30,6 @@ def mkdir_p(path):
             raise
 
 
-
 def split_h5_name(fullpath, sep='/'):
     """
     From h5ls.c:
@@ -42,10 +41,13 @@ def split_h5_name(fullpath, sep='/'):
     sep_inds = [i for i, c in enumerate(fullpath) if c == sep]
     for sep_idx in sep_inds:
         filename, objname = fullpath[:sep_idx], fullpath[sep_idx:]
-        if not filename: continue
+        if not filename:
+            continue
         # Try to open the file. If it fails, try the next separation point.
-        try: h5py.File(filename, 'r').close()
-        except IOError: continue
+        try:
+            h5py.File(filename, 'r').close()
+        except IOError:
+            continue
         # It worked!
         return filename, objname
     raise IOError('Could not open HDF5 file/object {}'.format(fullpath))
@@ -58,19 +60,23 @@ def discount(r_N_T_D, gamma):
     '''
     assert r_N_T_D.ndim == 2 or r_N_T_D.ndim == 3
     input_ndim = r_N_T_D.ndim
-    if r_N_T_D.ndim == 2: r_N_T_D = r_N_T_D[...,None]
+    if r_N_T_D.ndim == 2:
+        r_N_T_D = r_N_T_D[..., None]
 
     discfactors_T = np.power(gamma, np.arange(r_N_T_D.shape[1]))
-    discounted_N_T_D = r_N_T_D * discfactors_T[None,:,None]
-    q_N_T_D = np.cumsum(discounted_N_T_D[:,::-1,:], axis=1)[:,::-1,:] # this is equal to gamma**t * (r_N_T_D[i,t,:] + gamma*r_N_T_D[i,t+1,:] + ...)
-    q_N_T_D /= discfactors_T[None,:,None]
+    discounted_N_T_D = r_N_T_D * discfactors_T[None, :, None]
+    q_N_T_D = np.cumsum(
+        discounted_N_T_D[:, ::-1, :],
+        axis=1)[:, ::
+                -1, :]  # this is equal to gamma**t * (r_N_T_D[i,t,:] + gamma*r_N_T_D[i,t+1,:] + ...)
+    q_N_T_D /= discfactors_T[None, :, None]
 
     # Sanity check: Q values at last timestep should equal original rewards
-    assert np.allclose(q_N_T_D[:,-1,:], r_N_T_D[:,-1,:])
+    assert np.allclose(q_N_T_D[:, -1, :], r_N_T_D[:, -1, :])
 
     if input_ndim == 2:
         assert q_N_T_D.shape[-1] == 1
-        return q_N_T_D[:,:,0]
+        return q_N_T_D[:, :, 0]
     return q_N_T_D
 
 
@@ -108,7 +114,7 @@ def lookup_last_idx(a, inds):
     aflat, indsflat = np.reshape(a, (-1,)), np.reshape(inds, (-1,))
 
     # Compute the indices corresponding to inds in the flattened array
-    delta = gather(ashape, np.size(ashape)-1) # i.e. delta = ashape[-1],
+    delta = gather(ashape, np.size(ashape) - 1)  # i.e. delta = ashape[-1],
     aflatinds = np.arange(0, stop=np.size(a), step=delta) + indsflat
 
     # Look up the desired elements in the flattened array, and reshape
@@ -124,7 +130,18 @@ class Color(object):
     FAIL = '\033[91m'
     ENDC = '\033[0m'
 
-def header(s): print(Color.HEADER + '{}'.format(s.encode('utf-8')) + Color.ENDC)
-def warn(s): print(Color.WARNING + '{}'.format(s.encode('utf-8')) + Color.ENDC)
-def failure(s): print(Color.FAIL + '{}'.format(s.encode('utf-8')) + Color.ENDC)
-def ok(s): print(Color.OKBLUE + '{}'.format(s.encode('utf-8')) + Color.ENDC)
+
+def header(s):
+    print(Color.HEADER + '{}'.format(s) + Color.ENDC)
+
+
+def warn(s):
+    print(Color.WARNING + '{}'.format(s) + Color.ENDC)
+
+
+def failure(s):
+    print(Color.FAIL + '{}'.format(s) + Color.ENDC)
+
+
+def ok(s):
+    print(Color.OKBLUE + '{}'.format(s) + Color.ENDC)

@@ -3,6 +3,6 @@ class Algorithm(object):
 
 
 class RLAlgorithm(Algorithm):
+
     def train(self):
         raise NotImplementedError()
-

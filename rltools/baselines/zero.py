@@ -2,6 +2,7 @@ from rltools.baselines import Baseline
 
 
 class ZeroBaseline(Baseline):
+
     def __init__(self, obsfeat_space):
         pass
 
