@@ -65,6 +65,42 @@ class Categorical(Distribution):
         """Log density from categorical distribution params"""
         return tfutil.lookup_last_idx(dist_params_B_A, x_B_A)
 
+
+class RecurrentCategorical(Distribution):
+
+    def __init__(self, dim):
+        self._dim = dim
+        self._cat = Categorical(dim)
+
+    @property
+    def dim(self):
+        return self._dim
+
+    def log_density(self, dist_params_B_H_A, x_B_H_A):
+        adim = dist_params_B_H_A.shape[-1]
+        flat_logd = self._cat.log_density(
+            dist_params_B_H_A.reshape((-1, adim)), x_B_H_A.reshape((-1, adim)))
+        return flat_logd.reshape(dist_params_B_H_A.shape)
+
+    def entropy(self, probs_N_H_K):
+        tmp = -probs_N_H_K * np.log(probs_N_H_K + TINY)
+        tmp[~np.isfinite(tmp)] = 0
+        return tmp.sum(axis=2)
+
+    def kl_expr(self, logprobs1_B_H_A, logprobs2_B_H_A, name=None):
+        """KL divergence between categorical distributions, specified as log probabilities"""
+        with tf.op_scope([logprobs1_B_H_A, logprobs2_B_H_A], name, 'categorical_kl') as scope:
+            kl_B_H = tf.reduce_sum(
+                tf.exp(logprobs1_B_H_A) * (logprobs1_B_H_A - logprobs2_B_H_A), 2, name=scope)
+        return kl_B_H
+
+    def log_density_expr(self, dist_params_B_H_A, x_B_H_A):
+        adim = dist_params_B_H_A.shape[-1]
+        flat_logd = self._cat.log_density_expr(
+            tf.reshape(dist_params_B_H_A, (-1, adim)), tf.reshape(x_B_H_A, (-1, adim)))
+        return tf.reshape(flat_logd, dist_params_B_H_A.shape)
+
+
 class Gaussian(Distribution):
 
     def __init__(self, dim):
