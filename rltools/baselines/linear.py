@@ -2,6 +2,7 @@ import numpy as np
 import scipy.linalg
 import tensorflow as tf
 
+from rltools import nn
 from rltools.baselines import Baseline
 
 
