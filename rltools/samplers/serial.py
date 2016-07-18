@@ -1,6 +1,7 @@
 import copy
 import random
 
+from gym import spaces
 import numpy as np
 
 from rltools.samplers import Sampler
@@ -28,7 +29,11 @@ class SimpleSampler(Sampler):
                 a, adist = self.algo.policy.sample_actions(sess, obsfeat[-1])
                 actions.append(a)
                 actiondists.append(adist)
-                o2, r, done, _ = self.algo.env.step(actions[-1])  # FIXME
+                if isinstance(self.algo.policy.action_space, spaces.Discrete):
+                    assert a.ndim == 2 and a.size == 1 and a.dtype in (np.int32, np.int64)
+                    o2, r, done, _ = self.algo.env.step(actions[-1][0,0])  # XXX
+                else:
+                    o2, r, done, _ = self.algo.env.step(actions[-1])
                 rewards.append(r)
                 if done:
                     break

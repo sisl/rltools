@@ -18,10 +18,10 @@ class StochasticPolicy(Policy):
 
         with tf.variable_scope(varscope_name) as self.varscope:
             batch_size = None
-            if isinstance(action_space, spaces.Discrete):
+            if isinstance(self.action_space, spaces.Discrete):
                 action_type = tf.int32
                 action_dim = 1
-            elif isinstance(action_space, spaces.Box):
+            elif isinstance(self.action_space, spaces.Box):
                 action_type = tf.float32
                 action_dim = self.action_space.shape[0]
             else:
