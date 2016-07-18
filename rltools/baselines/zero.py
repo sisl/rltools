@@ -1,3 +1,5 @@
+import numpy as np
+
 from rltools.baselines import Baseline
 
 
