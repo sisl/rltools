@@ -39,7 +39,8 @@ def main():
         import matplotlib
         if args.plotfile is not None:
             matplotlib.use('Agg')
-        import matplotlib.pyplot as plt; plt.style.use('seaborn-colorblind')
+        import matplotlib.pyplot as plt
+        plt.style.use('seaborn-colorblind')
 
     ax = None
     for fname, df in fname2log.items():
@@ -49,15 +50,16 @@ def main():
 
         df['vf_r2'] = np.maximum(0, df['vf_r2'])
 
-    if not args.noplot:
-        if ax is None:
-            ax = df.plot(subplots=True, title=','.join(args.logfiles))
-        else:
-            df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
+        if not args.noplot:
+            if ax is None:
+                ax = df.plot(subplots=True, title=','.join(args.logfiles))
+            else:
+                df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
 
-        plt.show()
-    if args.plotfile is not None:
-        plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
+            plt.show()
+        if args.plotfile is not None:
+            plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
+
 
 if __name__ == '__main__':
     main()
