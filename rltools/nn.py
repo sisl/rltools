@@ -357,4 +357,4 @@ class Standardizer(Model):
         mu = 0.
         if centered:
             mu = self.get_mean(sess)
-        return y_B_D * (mu + self._eps) + mu
+        return y_B_D * (self.get_stdev(sess) + self._eps) + mu
