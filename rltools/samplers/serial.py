@@ -1,7 +1,6 @@
 import copy
 import random
 
-from gym import spaces
 import numpy as np
 
 from rltools.samplers import Sampler, rollout
