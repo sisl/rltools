@@ -22,23 +22,11 @@ class SimpleSampler(Sampler):
 
         trajs = []
         for _ in range(self.batch_size):
-            obs, obsfeat, actions, actiondists, rewards = rollout(self.algo.env,
-                                                                 self.algo.obsfeat_fn,
-                                                                 lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
-                                                                 self.max_traj_len, self.algo.policy.action_space)
+             trajs.append(rollout(self.algo.env,
+                                  self.algo.obsfeat_fn,
+                                  lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                                  self.max_traj_len, self.algo.policy.action_space))
 
-            obs_T_Do = np.concatenate(obs)
-            assert obs_T_Do.shape[0] == len(obs), '{} != {}'.format(obs_T_Do.shape, len(obs))
-            obsfeat_T_Df = np.concatenate(obsfeat)
-            assert obsfeat_T_Df.shape[0] == len(obs), '{} != {}'.format(obsfeat_T_Df.shape,
-                                                                        len(obs))
-            adist_T_Pa = np.concatenate(actiondists)
-            assert adist_T_Pa.ndim == 2 and adist_T_Pa.shape[0] == len(obs)
-            a_T_Da = np.concatenate(actions)
-            assert a_T_Da.shape[0] == len(obs)
-            r_T = np.asarray(rewards)
-            assert r_T.shape == (len(obs),)
-            trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
         trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,
                 [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
