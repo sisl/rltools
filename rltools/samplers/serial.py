@@ -4,7 +4,7 @@ import random
 from gym import spaces
 import numpy as np
 
-from rltools.samplers import Sampler
+from rltools.samplers import Sampler, rollout
 from rltools.trajutil import TrajBatch, Trajectory
 
 
@@ -22,23 +22,10 @@ class SimpleSampler(Sampler):
 
         trajs = []
         for _ in range(self.batch_size):
-            obs, obsfeat, actions, actiondists, rewards = [], [], [], [], []
-            obs.append((self.algo.env.reset())[None, ...].copy())
-            for itr in range(self.max_traj_len):
-                obsfeat.append(self.algo.obsfeat_fn(obs[-1]))
-                a, adist = self.algo.policy.sample_actions(sess, obsfeat[-1])
-                actions.append(a)
-                actiondists.append(adist)
-                if isinstance(self.algo.policy.action_space, spaces.Discrete):
-                    assert a.ndim == 2 and a.size == 1 and a.dtype in (np.int32, np.int64)
-                    o2, r, done, _ = self.algo.env.step(actions[-1][0,0])  # XXX
-                else:
-                    o2, r, done, _ = self.algo.env.step(actions[-1])
-                rewards.append(r)
-                if done:
-                    break
-                if itr != self.max_traj_len - 1:
-                    obs.append(o2[None, ...])
+            obs, obsfeat, actions, actiondists, rewards = rollout(self.algo.env,
+                                                                 self.algo.obsfeat_fn,
+                                                                 lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                                                                 self.max_traj_len, self.algo.policy.action_space)
 
             obs_T_Do = np.concatenate(obs)
             assert obs_T_Do.shape[0] == len(obs), '{} != {}'.format(obs_T_Do.shape, len(obs))

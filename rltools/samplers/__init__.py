@@ -1,6 +1,7 @@
 import numpy as np
+from gym import spaces
 
-from rltools import util
+import rltools.util
 from rltools.trajutil import RaggedArray, TrajBatch, Trajectory
 
 
@@ -35,7 +36,8 @@ class Sampler(object):
         maxT = max(trajlens)
 
         rewards_B_T = trajbatch.r.padded(fill=0.)
-        qvals_zfilled_B_T = util.discount(rewards_B_T, self.algo.discount)
+        assert not self.algo.discount is None
+        qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, self.algo.discount)
         assert qvals_zfilled_B_T.shape == (self.batch_size, maxT)
         q = RaggedArray([qvals_zfilled_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
         q_B_T = q.padded(fill=np.nan)  # q vals padded with nans in the end
@@ -72,7 +74,7 @@ class Sampler(object):
         v_B_Tp1 = np.concatenate([v_B_T, np.zeros((self.batch_size, 1))], axis=1)
         assert v_B_Tp1.shape == (self.batch_size, maxT + 1)
         delta_B_T = rewards_B_T + self.algo.discount * v_B_Tp1[:, 1:] - v_B_Tp1[:, :-1]
-        adv_B_T = util.discount(delta_B_T, self.algo.discount * self.algo.gae_lambda)
+        adv_B_T = rltools.util.discount(delta_B_T, self.algo.discount * self.algo.gae_lambda)
         assert adv_B_T.shape == (self.batch_size, maxT)
         adv = RaggedArray([adv_B_T[i, :l] for i, l in enumerate(trajlens)])
         assert np.allclose(adv.padded(fill=0), adv_B_T)
@@ -84,3 +86,27 @@ class Sampler(object):
 
     def stop(self):
         raise NotImplementedError()
+
+
+def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+    obs, obsfeat, actions, actiondists, rewards = [], [], [], [], []
+    obs.append((env.reset())[None, ...].copy())
+
+    for itr in range(max_traj_len):
+        obsfeat.append(obsfeat_fn(obs[-1]))
+        a, adist = act_fn(obsfeat[-1])
+        actions.append(a)
+        actiondists.append(adist)
+        if isinstance(action_space, spaces.Discrete):
+            assert a.ndim == 2 and a.size == 1 and a.dtype in (np.int32, np.int64)
+            o2, r, done, _ = env.step(actions[-1][0, 0])  # XXX
+        else:
+            o2, r, done, _ = env.step(actions[-1])
+
+        rewards.append(r)
+        if done:
+            break
+        if itr != max_traj_len - 1:
+            obs.append(o2[None, ...])
+
+    return obs, obsfeat, actions, actiondists, rewards
