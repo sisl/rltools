@@ -20,7 +20,7 @@ class StochasticPolicy(Policy):
             batch_size = None
             if isinstance(self.action_space, spaces.Discrete):
                 action_type = tf.int32
-                action_dim = 1
+                action_dim = 1 if not hasattr(action_space, 'ndim') else action_space.ndim
             elif isinstance(self.action_space, spaces.Box):
                 action_type = tf.float32
                 action_dim = self.action_space.shape[0]
@@ -43,8 +43,9 @@ class StochasticPolicy(Policy):
                                                                   self._input_action_B_Da)
 
             # proposal distribution from old policy
-            self._proposal_actiondist_B_Pa = tf.placeholder(
-                tf.float32, [batch_size, num_actiondist_params], name='proposal_actiondist_B_Pa')
+            self._proposal_actiondist_B_Pa = tf.placeholder(tf.float32,
+                                                            [batch_size, num_actiondist_params],
+                                                            name='proposal_actiondist_B_Pa')
             self._proposal_logprobs_B = self._make_actiondist_logprobs_ops(
                 self._proposal_actiondist_B_Pa, self._input_action_B_Da)
 

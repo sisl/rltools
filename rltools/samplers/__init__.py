@@ -98,8 +98,12 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
         actions.append(a)
         actiondists.append(adist)
         if isinstance(action_space, spaces.Discrete):
-            assert a.ndim == 2 and a.size == 1 and a.dtype in (np.int32, np.int64)
-            o2, r, done, _ = env.step(actions[-1][0, 0])  # XXX
+            ndim = 1 if not hasattr(action_space, 'ndim') else action_space.ndim
+            assert a.ndim == 2 and a.dtype in (np.int32, np.int64)
+            if ndim == 1:
+                o2, r, done, _ = env.step(actions[-1][0, 0])  # XXX
+            else:
+                o2, r, done, _ = env.step(actions[-1][0, :ndim])  # XXX
         else:
             o2, r, done, _ = env.step(actions[-1])
 
