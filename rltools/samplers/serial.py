@@ -45,10 +45,8 @@ class DecSampler(Sampler):
                                          max_batch_size, batch_rate, adaptive)
 
     def sample(self, sess, itr):
-        assert self.batch_size >= self.algo.env.n_agents(
-        ), 'Batch size should be at least as large as number of agents'
-        assert self.batch_size % self.algo.env.n_agents(
-        ) == 0, 'Batch size should be evenly divisible by number of agents'
+        assert self.batch_size >= self.algo.env.total_agents, 'Batch size should be at least as large as number of agents'
+        assert self.batch_size % self.algo.env.total_agents == 0, 'Batch size should be evenly divisible by number of agents'
         if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
             if itr % self.batch_rate == 0:
                 self.batch_size *= 2
@@ -61,14 +59,11 @@ class DecSampler(Sampler):
 
         env = self.algo.env
         trajs = []
-        for _ in range(self.batch_size /
-                       env.n_agents()):  #FIXME: batch size depends on number of agents
+        for _ in range(self.batch_size / env.total_agents): #FIXME: batch size depends on number of agents
             old_ob = env.reset()
-            n_total = env.n_agents()
-            obs, obsfeat, actions, actiondists, rewards = get_lists(5, n_total)
+            obs, obsfeat, actions, actiondists, rewards = get_lists(5, env.total_agents)
             for itr in range(self.max_traj_len):
                 agent_actions = []
-                n = env.n_agents()
                 for i, agent_obs in enumerate(old_ob):
                     if agent_obs is None:
                         continue
@@ -78,7 +73,7 @@ class DecSampler(Sampler):
                     agent_actions.append(a)
                     actions[i].append(a)
                     actiondists[i].append(adist)
-                    new_ob, r, done, _ = env.step(np.array(agent_actions)[:, 0, 0])  #FIXME
+                new_ob, r, done, _ = env.step(np.array(agent_actions)[:, 0, 0])  #FIXME
                 for i, o in enumerate(old_ob):
                     if o is None:
                         continue
@@ -87,7 +82,7 @@ class DecSampler(Sampler):
                 if done:
                     break
 
-            for agnt in range(n_total):
+            for agnt in range(env.total_agents):
                 obs_T_Do = np.concatenate(obs[agnt])
                 obsfeat_T_Df = np.concatenate(obsfeat[agnt])
                 adist_T_Pa = np.concatenate(actiondists[agnt])

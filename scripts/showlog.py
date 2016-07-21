@@ -55,10 +55,10 @@ def main():
                 ax = df.plot(subplots=True, title=','.join(args.logfiles))
             else:
                 df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
-
-            plt.show()
-        if args.plotfile is not None:
-            plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
+    if args.plotfile is not None:
+        plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
+    else:
+        plt.show()
 
 
 if __name__ == '__main__':

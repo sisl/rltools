@@ -20,7 +20,10 @@ class StochasticPolicy(Policy):
             batch_size = None
             if isinstance(self.action_space, spaces.Discrete):
                 action_type = tf.int32
-                action_dim = 1
+                if hasattr(self.action_space, 'ndim'):
+                    action_dim = self.action_space.ndim
+                else:
+                    action_dim = 1
             elif isinstance(self.action_space, spaces.Box):
                 action_type = tf.float32
                 action_dim = self.action_space.shape[0]
