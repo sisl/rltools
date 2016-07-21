@@ -98,11 +98,12 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
         actions.append(a)
         actiondists.append(adist)
         if isinstance(action_space, spaces.Discrete):
+            ndim = 1 if not hasattr(action_space, 'ndim') else action_space.ndim
             assert a.ndim == 2 and a.dtype in (np.int32, np.int64)
-            if hasattr(action_space, 'ndim'):
-                o2, r, done, _ = env.step(actions[-1][0, :action_space.ndim])
+            if ndim == 1:
+                o2, r, done, _ = env.step(actions[-1][0, 0])  # XXX
             else:
-                o2, r, done, _ = env.step(actions[-1][0, 0])
+                o2, r, done, _ = env.step(actions[-1][0, :ndim])  # XXX
         else:
             o2, r, done, _ = env.step(actions[-1])
 
@@ -119,8 +120,7 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
     adist_T_Pa = np.concatenate(actiondists)
     assert adist_T_Pa.ndim == 2 and adist_T_Pa.shape[0] == len(obs)
     a_T_Da = np.concatenate(actions)
-    # TODO: for facotred policy assertion fails 
-    #assert a_T_Da.shape[0] == len(obs)
+    assert a_T_Da.shape[0] == len(obs)
     r_T = np.asarray(rewards)
     assert r_T.shape == (len(obs),)
 
