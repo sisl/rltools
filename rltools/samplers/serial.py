@@ -214,3 +214,82 @@ class ImportanceWeightedSampler(SimpleSampler):
                      ]
 
         return rettrajbatch, batch_info
+
+
+class ExperienceReplay(Sampler):
+
+    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
+                 adaptive=False, initial_exploration=5000, max_experience=10000):
+        super(ExperienceReplay, self).__init__(algo, max_traj_len, batch_size, min_batch_size,
+                                            max_batch_size, batch_rate, adaptive)
+        self._observations = np.zeros((max_experience,) + self.algo.env.observation_space.shape)
+        self._actions = np.zeros(max_experience, dtype=np.int32)
+        self._rewards = np.zeros(max_experience)
+        self._next_observations = np.zeros((max_experience,) + self.algo.env.observation_space.shape)
+        self._terminals = np.zeros(max_experience, dtype=np.bool)
+
+        self.head = 0
+        self.replay_size = 0
+        self.initial_exploration = initial_exploration
+        self.max_experience = max_experience
+
+        self.reset(initial_exploration)
+
+        self.old_ob = self.algo.env.reset()
+
+    def sample(self, sess, itr):
+        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
+            if itr % self.batch_rate == 0:
+                self.batch_size *= 2
+        env = self.algo.env
+
+        indices = random.sample(xrange(self.replay_size), self.batch_size)
+        
+        ofeat = self.algo.obsfeat_fn(np.expand_dims(self.old_ob, 0))
+        a, _ = self.algo.policy.sample_actions(sess, ofeat)
+        o, r, done, _ = env.step(a[0,0])
+        self.store(self.old_ob, a, r, o, done)
+        if done or itr % self.max_traj_len == 0:
+            self.old_ob = env.reset()
+        else:
+            self.old_ob = o
+
+        # convert samples to batch?
+        samples = dict(
+                observations=self._observations[indices],
+                actions=self._actions[indices],
+                rewards=self._rewards[indices],
+                terminals=self._terminals[indices],
+                next_observations=self._next_observations[indices]
+                )
+        samples_info = [('r_ave', samples['rewards'].mean(), float)]
+        return samples, samples_info
+
+    def reset(self, initial_exploration):
+        env = self.algo.env
+        n_samples = 0
+        traj_length = 0
+        o = env.reset()
+        while n_samples <= self.max_experience:
+            a = env.action_space.sample() 
+            op, r, done, _ = env.step(a)
+            self.store(o, a, r, op, done)
+            o = op
+            traj_length += 1
+            n_samples += 1
+            if traj_length > self.max_traj_len or done: 
+                o = env.reset()
+                traj_length = 0
+                continue
+
+    def store(self, obs, action, reward, obsp, done):
+        if self.replay_size < self.max_experience: self.replay_size += 1
+        self._observations[self.head] = obs
+        self._actions[self.head] = action 
+        self._rewards[self.head] = reward
+        self._next_observations[self.head] = obsp
+        self._terminals[self.head] = done
+        self.head += 1
+        if self.head >= self.max_experience:
+            self.head = 0
+

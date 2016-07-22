@@ -125,3 +125,20 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
     assert r_T.shape == (len(obs),)
 
     return Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T)
+
+def evaluate(env, obsfeat_fn, action_fn, max_traj_len, n_traj):
+    rs = np.zeros(n_traj)
+    for t in xrange(n_traj):
+        rtot = 0.0
+        o = env.reset() 
+        for itr in xrange(max_traj_len):
+            a = action_fn(obsfeat_fn(np.expand_dims(o,0)))
+            o2, r, done, _ = env.step(a)  # XXX
+            rtot += r
+            if done:
+                break
+        rs[t] = rtot
+    return rs.mean()
+
+
+
