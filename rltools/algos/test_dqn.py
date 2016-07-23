@@ -29,10 +29,15 @@ policy = EpsGreedyMLPPolicy(env.observation_space, env.action_space,
                                       enable_obsnorm=True,
                                       tblog='tmp/test_tb', varscope_name='dqn_policy')
 
+target_policy = EpsGreedyMLPPolicy(env.observation_space, env.action_space,
+                                      hidden_spec=SIMPLE_POLICY_ARCH,
+                                      enable_obsnorm=True,
+                                      tblog='tmp/test_tb', varscope_name='target_dqn_policy')
+
 sampler_cls = ExperienceReplay
 
-sampler_args = dict(max_traj_len=200,
-                            batch_size=32,
+sampler_args = dict(max_traj_len=500,
+                            batch_size=128,
                             min_batch_size=4,
                             max_batch_size=64,
                             batch_rate=40,
@@ -42,12 +47,15 @@ sampler_args = dict(max_traj_len=200,
 
 dqn_opt = rltools.algos.dqn.DQNOptimizer(env=env,
                                 policy=policy,
+                                target_policy=target_policy,
                                 discount=0.95,
                                 n_iter=1000,
+                                n_eval_traj=10,
                                 sampler_cls=sampler_cls,
                                 sampler_args=sampler_args,
                                 start_eps=1.0,
-                                end_eps=0.05)
+                                end_eps=0.05,
+                                clip_grads=None)
 
 
 args = {'adaptive_batch': False,
