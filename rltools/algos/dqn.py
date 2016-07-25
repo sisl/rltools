@@ -1,5 +1,6 @@
 from __future__ import absolute_import, print_function
 
+import random
 import numpy as np
 
 from rltools import util
@@ -9,15 +10,15 @@ from rltools.samplers import evaluate
 
 class DQN(RLAlgorithm):
 
-    def __init__(self, env, q_func, target_q_func, policy, target_update_step,
+    def __init__(self, env, q_func, target_q_func, target_update_step, eps,
                  obsfeat_fn=lambda obs: obs, max_experience_size=10000, traj_sim_len=500,
                  batch_size=64, discount=0.99, n_iter=100000, start_iter=0, store_paths=False,
                  whole_paths=True, double_dqn=False, duel_net=False, **kwargs):
         self.env = env
         self.q_func = q_func
         self.target_q_func = target_q_func
-        self.policy = policy
         self.target_update_step = target_update_step
+        self.eps = eps
         self.obsfeat_fn = obsfeat_fn
         self.max_experience_size = max_experience_size
         self.traj_sim_len = traj_sim_len
@@ -39,21 +40,27 @@ class DQN(RLAlgorithm):
     def initialize(self, sess):
         self.target_q_func.copy_params_from_primary(sess)
         if self.debug:
-            assert all(
-                np.allclose(p1, p2)
-                for p1, p2 in util.safezip(
-                    sess.run(self.q_func.get_params()), sess.run(self.target_q_func.get_params())))
+            assert all(np.allclose(p1, p2)
+                       for p1, p2 in util.safezip(
+                           self.q_func.get_params(sess), self.target_q_func.get_params(sess)))
+
+    def _compute_action(self, sess, obsfeat_Df):
+        assert len(obsfeat_Df.shape) == 1
+        if random.random() < self.eps:
+            return self.env.action_space.sample()
+        else:
+            return self.q_func.compute_qactions(sess, obsfeat_Df)[0, 0]
 
     def _pack_into_batch(self, transitions):
         num = len(transitions)
         obs_B_Do = np.zeros((num, self.env.observation_space.shape[0]))
-        actions_B_Da = np.zeros((num, self.env.action_space.n))
+        actions_B_Da = np.zeros((num, 1))
         rewards_B = np.zeros(num)
         succ_obs_B_Do = np.zeros((num, self.env.observation_space.shape[0]))
         for i, (obs_Do, action_Da, reward, succ_obs_Do) in enumerate(transitions):
             obs_B_Do[i, :] = obs_Do
             actions_B_Da[i, :] = action_Da
-            rewards_B[i, :] = reward
+            rewards_B[i] = reward
             succ_obs_B_Do[i, :] = succ_obs_Do
 
         return obs_B_Do, actions_B_Da, rewards_B, succ_obs_B_Do
@@ -72,8 +79,7 @@ class DQN(RLAlgorithm):
             q_loss = np.zeros(self.traj_sim_len)
             with util.Timer() as t_sim:
                 for t in range(self.traj_sim_len):
-                    curr_action_Da = self._compute_actions(sess, self.obsfeat_fn(curr_obs_Do))
-                    assert curr_action_Da.shape == (1,)
+                    curr_action_Da = self._compute_action(sess, self.obsfeat_fn(curr_obs_Do))
                     next_obs_Do, curr_reward, done, _ = self.env.step(curr_action_Da)
 
                     # TODO: not sure, maybe after adding to memory?
@@ -104,9 +110,10 @@ class DQN(RLAlgorithm):
                 self.target_q_func.copy_params_from_primary(sess)
 
             with util.Timer() as t_eval:
-                eval_return = evaluate(self.env, self.obsfeat_fn,
-                                       lambda ofeat: self.qfunc.compute_qactions(sess, ofeat),
-                                       self.traj_sim_len, 100)
+                eval_return = evaluate(
+                    self.env, self.obsfeat_fn,
+                    lambda ofeat: self.q_func.compute_qactions(sess, ofeat)[0, 0],
+                    self.traj_sim_len, 100)
 
         self.total_time += t_all.dt
 
