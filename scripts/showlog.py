@@ -57,7 +57,7 @@ def main():
                 df.plot(subplots=True, title=','.join(args.logfiles), ax=ax, legend=False)
     if args.plotfile is not None:
         plt.savefig(args.plotfile, transparent=True, bbox_inches='tight', dpi=300)
-    else:
+    elif not args.noplot:
         plt.show()
 
 

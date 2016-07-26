@@ -161,7 +161,7 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
             if o is None:
                 continue
             rewards[i].append(r)
-            old_obs = new_obs
+        old_obs = new_obs
 
         if done:
             break
