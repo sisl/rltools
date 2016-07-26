@@ -126,19 +126,67 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
 
     return Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T)
 
+
+def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+
+    def get_lists(nl, na):
+        l = []
+        for i in range(nl):
+            l.append([[] for j in range(na)])
+        return l
+
+    trajs = []
+    old_obs = env.reset()
+    obs, obsfeat, actions, actiondists, rewards = get_lists(5, env.total_agents)
+
+    for itr in range(max_traj_len):
+        agent_actions = []
+        for i, agent_obs in enumerate(old_obs):
+            if agent_obs is None:
+                continue
+            obs[i].append(np.expand_dims(agent_obs, 0))
+            obsfeat[i].append(obsfeat_fn(obs[i][-1]))
+            a, adist = act_fn(obsfeat[i][-1])
+            agent_actions.append(a)
+            actions[i].append(a)
+            actiondists[i].append(adist)
+
+        comp_actions = np.array(agent_actions)
+        if isinstance(action_space, spaces.Discrete):
+            new_obs, r, done, _ = env.step(comp_actions[:, 0, 0])
+        else:
+            new_obs, r, done, _ = env.step(comp_actions)
+
+        for i, o in enumerate(old_obs):
+            if o is None:
+                continue
+            rewards[i].append(r)
+            old_obs = new_obs
+
+        if done:
+            break
+
+    for agnt in range(env.total_agents):
+        obs_T_Do = np.concatenate(obs[agnt])
+        obsfeat_T_Df = np.concatenate(obsfeat[agnt])
+        adist_T_Pa = np.concatenate(actiondists[agnt])
+        a_T_Da = np.concatenate(actions[agnt])
+        r_T = np.asarray(rewards[agnt])
+        trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
+
+    return trajs
+
+
 def evaluate(env, obsfeat_fn, action_fn, max_traj_len, n_traj):
     rs = np.zeros(n_traj)
     for t in xrange(n_traj):
         rtot = 0.0
-        o = env.reset() 
-        for itr in xrange(max_traj_len):
-            a = action_fn(obsfeat_fn(np.expand_dims(o,0)))
+        o = env.reset()
+        for itr in range(max_traj_len):
+            a = action_fn(obsfeat_fn(np.expand_dims(o, 0)))
             o2, r, done, _ = env.step(a)  # XXX
             rtot += r
             if done:
                 break
         rs[t] = rtot
     return rs.mean()
-
-
-
