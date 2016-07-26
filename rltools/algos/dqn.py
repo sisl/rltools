@@ -12,7 +12,7 @@ class DQN(RLAlgorithm):
 
     def __init__(self, env, q_func, target_q_func, target_update_step, eps,
                  obsfeat_fn=lambda obs: obs, max_experience_size=10000, traj_sim_len=500,
-                 batch_size=64, discount=0.99, n_iter=100000, start_iter=0, store_paths=False,
+                 batch_size=32, discount=0.99, n_iter=100000, start_iter=0, store_paths=False,
                  whole_paths=True, double_dqn=False, duel_net=False, **kwargs):
         self.env = env
         self.q_func = q_func
@@ -57,13 +57,15 @@ class DQN(RLAlgorithm):
         actions_B_Da = np.zeros((num, 1))
         rewards_B = np.zeros(num)
         succ_obs_B_Do = np.zeros((num, self.env.observation_space.shape[0]))
-        for i, (obs_Do, action_Da, reward, succ_obs_Do) in enumerate(transitions):
+        done_B = np.zeros(num)
+        for i, (obs_Do, action_Da, reward, succ_obs_Do, done) in enumerate(transitions):
             obs_B_Do[i, :] = obs_Do
             actions_B_Da[i, :] = action_Da
             rewards_B[i] = reward
             succ_obs_B_Do[i, :] = succ_obs_Do
+            done_B = done
 
-        return obs_B_Do, actions_B_Da, rewards_B, succ_obs_B_Do
+        return obs_B_Do, actions_B_Da, rewards_B, succ_obs_B_Do, done_B
 
     def train(self, sess, log, save_freq):
         self.initialize(sess)
@@ -82,12 +84,9 @@ class DQN(RLAlgorithm):
                     curr_action_Da = self._compute_action(sess, self.obsfeat_fn(curr_obs_Do))
                     next_obs_Do, curr_reward, done, _ = self.env.step(curr_action_Da)
 
-                    # TODO: not sure, maybe after adding to memory?
-                    if done:
-                        break
-
                     # Memory (s,a,r,s')
-                    self.memory.append((curr_obs_Do, curr_action_Da, curr_reward, next_obs_Do))
+                    self.memory.append(
+                        (curr_obs_Do, curr_action_Da, curr_reward, next_obs_Do, int(done)))
                     self.memory = self.memory[-self.max_experience_size:]
 
                     curr_obs_Do = next_obs_Do
@@ -95,16 +94,19 @@ class DQN(RLAlgorithm):
                     transitions_B = [self.memory[idx]
                                      for idx in np.random.choice(
                                          len(self.memory), size=self.batch_size)]
-                    batch_obs_B_Do, batch_actions_B_Da, batch_rewards_B, batch_succ_obs_B_Do = self._pack_into_batch(
+                    batch_obs_B_Do, batch_actions_B_Da, batch_rewards_B, batch_succ_obs_B_Do, batch_done_B = self._pack_into_batch(
                         transitions_B)
 
                     batch_succ_target_actions_B_Da = self.target_q_func.compute_qactions(
                         sess, self.obsfeat_fn(batch_succ_obs_B_Do))
-                    batch_qtargets_B = batch_rewards_B + self.discount * self.target_q_func.compute_qvals(
+                    batch_qtargets_B = batch_rewards_B + self.discount * batch_done_B * self.target_q_func.compute_qvals(
                         sess, self.obsfeat_fn(batch_succ_obs_B_Do), batch_succ_target_actions_B_Da)
 
                     q_loss[t] = self.q_func.opt_step(sess, self.obsfeat_fn(batch_obs_B_Do),
                                                      batch_actions_B_Da, batch_qtargets_B)
+
+                    if done:
+                        break
 
             if itr % self.target_update_step == self.target_update_step - 1:
                 self.target_q_func.copy_params_from_primary(sess)

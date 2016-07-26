@@ -9,20 +9,20 @@ from rltools.qnet.categorical_qnet import CategoricalQFunction
 
 SIMPLE_ARCH = '''[
         {"type": "fc", "n": 32},
-        {"type": "nonlin", "func": "relu"},
+        {"type": "nonlin", "func": "tanh"},
         {"type": "fc", "n": 32},
-        {"type": "nonlin", "func": "relu"}
+        {"type": "nonlin", "func": "tanh"}
     ]
     '''
 
 
 def run():
     env = gym.make('CartPole-v0')
-    q_func = CategoricalQFunction(env.observation_space, env.action_space, SIMPLE_ARCH, 1e-2,
+    q_func = CategoricalQFunction(env.observation_space, env.action_space, SIMPLE_ARCH, 1e-4,
                                   varscope_name='QFunc')
-    target_q_func = CategoricalQFunction(env.observation_space, env.action_space, SIMPLE_ARCH, 1e-2,
+    target_q_func = CategoricalQFunction(env.observation_space, env.action_space, SIMPLE_ARCH, 1e-4,
                                          primary_q_func=q_func, varscope_name='targetQFunc')
-    algorithm = DQN(env, q_func, target_q_func, 20, 0.01)
+    algorithm = DQN(env, q_func, target_q_func, 200, 0.01)
     log_f = rltools.log.TrainingLog(None, [])
 
     with tf.Session() as sess:
