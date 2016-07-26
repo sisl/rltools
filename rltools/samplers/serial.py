@@ -3,7 +3,7 @@ import random
 
 import numpy as np
 
-from rltools.samplers import Sampler, rollout
+from rltools.samplers import Sampler, rollout, decrollout
 from rltools.trajutil import TrajBatch, Trajectory
 
 
@@ -21,10 +21,10 @@ class SimpleSampler(Sampler):
 
         trajs = []
         for _ in range(self.batch_size):
-             trajs.append(rollout(self.algo.env,
-                                  self.algo.obsfeat_fn,
-                                  lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
-                                  self.max_traj_len, self.algo.policy.action_space))
+            trajs.append(
+                rollout(self.algo.env, self.algo.obsfeat_fn,
+                        lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                        self.max_traj_len, self.algo.policy.action_space))
 
         trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,
@@ -32,8 +32,8 @@ class SimpleSampler(Sampler):
                   float),  # average return for batch of traj
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
-                 ('ravg', trajbatch.r.stacked.mean(), int
-                 )  # avg reward encountered per time step (probably not that useful)
+                 ('ravg', trajbatch.r.stacked.mean(),
+                  int)  # avg reward encountered per time step (probably not that useful)
                 ])
 
 
@@ -51,44 +51,43 @@ class DecSampler(Sampler):
             if itr % self.batch_rate == 0:
                 self.batch_size *= 2
 
-        def get_lists(nl, na):
-            l = []
-            for i in range(nl):
-                l.append([[] for j in xrange(na)])
-            return l
-
         env = self.algo.env
         trajs = []
-        for _ in range(self.batch_size / env.total_agents): #FIXME: batch size depends on number of agents
-            old_ob = env.reset()
-            obs, obsfeat, actions, actiondists, rewards = get_lists(5, env.total_agents)
-            for itr in range(self.max_traj_len):
-                agent_actions = []
-                for i, agent_obs in enumerate(old_ob):
-                    if agent_obs is None:
-                        continue
-                    obs[i].append(np.expand_dims(agent_obs, 0))
-                    obsfeat[i].append(self.algo.obsfeat_fn(obs[i][-1]))
-                    a, adist = self.algo.policy.sample_actions(sess, obsfeat[i][-1])
-                    agent_actions.append(a)
-                    actions[i].append(a)
-                    actiondists[i].append(adist)
-                new_ob, r, done, _ = env.step(np.array(agent_actions)[:, 0, 0])  #FIXME
-                for i, o in enumerate(old_ob):
-                    if o is None:
-                        continue
-                    rewards[i].append(r)
-                    old_ob = new_ob
-                if done:
-                    break
+        for _ in range(self.batch_size /
+                       env.total_agents):  #FIXME: batch size depends on number of agents
+            trajs.extend(
+                decrollout(self.algo.env, self.algo.obsfeat_fn,
+                           lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                           self.max_traj_len, self.algo.policy.action_space))
+            # old_ob = env.reset()
+            # obs, obsfeat, actions, actiondists, rewards = get_lists(5, env.total_agents)
+            # for itr in range(self.max_traj_len):
+            #     agent_actions = []
+            #     for i, agent_obs in enumerate(old_ob):
+            #         if agent_obs is None:
+            #             continue
+            #         obs[i].append(np.expand_dims(agent_obs, 0))
+            #         obsfeat[i].append(self.algo.obsfeat_fn(obs[i][-1]))
+            #         a, adist = self.algo.policy.sample_actions(sess, obsfeat[i][-1])
+            #         agent_actions.append(a)
+            #         actions[i].append(a)
+            #         actiondists[i].append(adist)
+            #     new_ob, r, done, _ = env.step(np.array(agent_actions)[:, 0, 0])  #FIXME
+            #     for i, o in enumerate(old_ob):
+            #         if o is None:
+            #             continue
+            #         rewards[i].append(r)
+            #         old_ob = new_ob
+            #     if done:
+            #         break
 
-            for agnt in range(env.total_agents):
-                obs_T_Do = np.concatenate(obs[agnt])
-                obsfeat_T_Df = np.concatenate(obsfeat[agnt])
-                adist_T_Pa = np.concatenate(actiondists[agnt])
-                a_T_Da = np.concatenate(actions[agnt])
-                r_T = np.asarray(rewards[agnt])
-                trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
+            # for agnt in range(env.total_agents):
+            #     obs_T_Do = np.concatenate(obs[agnt])
+            #     obsfeat_T_Df = np.concatenate(obsfeat[agnt])
+            #     adist_T_Pa = np.concatenate(actiondists[agnt])
+            #     a_T_Da = np.concatenate(actions[agnt])
+            #     r_T = np.asarray(rewards[agnt])
+            #     trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
 
         trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,
@@ -96,8 +95,8 @@ class DecSampler(Sampler):
                   float),  # average return for batch of traj
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
-                 ('ravg', trajbatch.r.stacked.mean(), int
-                 )  # avg reward encountered per time step (probably not that useful)
+                 ('ravg', trajbatch.r.stacked.mean(),
+                  int)  # avg reward encountered per time step (probably not that useful)
                 ])
 
 
@@ -124,8 +123,9 @@ class ImportanceWeightedSampler(SimpleSampler):
         self.max_is_ratio = max_is_ratio
         self._hist = []
         self._is_itr = 0
-        super(ImportanceWeightedSampler, self).__init__(
-            algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate, adaptive)
+        super(ImportanceWeightedSampler, self).__init__(algo, max_traj_len, batch_size,
+                                                        min_batch_size, max_batch_size, batch_rate,
+                                                        adaptive)
         assert not self.adaptive, "Can't use adaptive sampling with importance weighted for now"  # TODO needed?
 
     @property
@@ -209,8 +209,8 @@ class ImportanceWeightedSampler(SimpleSampler):
                        float),  # average return for batch of traj
                       ('avglen', int(np.mean([len(traj) for traj in rettrajbatch])),
                        int),  # average traj length
-                      ('ravg', rettrajbatch.r.stacked.mean(), int
-                      )  # avg reward encountered per time step (probably not that useful)
+                      ('ravg', rettrajbatch.r.stacked.mean(),
+                       int)  # avg reward encountered per time step (probably not that useful)
                      ]
 
         return rettrajbatch, batch_info
@@ -221,11 +221,12 @@ class ExperienceReplay(Sampler):
     def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
                  adaptive=False, initial_exploration=5000, max_experience=10000):
         super(ExperienceReplay, self).__init__(algo, max_traj_len, batch_size, min_batch_size,
-                                            max_batch_size, batch_rate, adaptive)
+                                               max_batch_size, batch_rate, adaptive)
         self._observations = np.zeros((max_experience,) + self.algo.env.observation_space.shape)
         self._actions = np.zeros(max_experience, dtype=np.int32)
         self._rewards = np.zeros(max_experience)
-        self._next_observations = np.zeros((max_experience,) + self.algo.env.observation_space.shape)
+        self._next_observations = np.zeros((max_experience,) +
+                                           self.algo.env.observation_space.shape)
         self._terminals = np.zeros(max_experience, dtype=np.bool)
 
         self.head = 0
@@ -244,10 +245,10 @@ class ExperienceReplay(Sampler):
         env = self.algo.env
 
         indices = random.sample(xrange(self.replay_size), self.batch_size)
-        
+
         ofeat = self.algo.obsfeat_fn(np.expand_dims(self.old_ob, 0))
         a, _ = self.algo.policy.sample_actions(sess, ofeat)
-        o, r, done, _ = env.step(a[0,0])
+        o, r, done, _ = env.step(a[0, 0])
         self.store(self.old_ob, a, r, o, done)
         if done or itr % self.max_traj_len == 0:
             self.old_ob = env.reset()
@@ -255,13 +256,9 @@ class ExperienceReplay(Sampler):
             self.old_ob = o
 
         # convert samples to batch?
-        samples = dict(
-                observations=self._observations[indices],
-                actions=self._actions[indices],
-                rewards=self._rewards[indices],
-                terminals=self._terminals[indices],
-                next_observations=self._next_observations[indices]
-                )
+        samples = dict(observations=self._observations[indices], actions=self._actions[indices],
+                       rewards=self._rewards[indices], terminals=self._terminals[indices],
+                       next_observations=self._next_observations[indices])
         samples_info = [('r_ave', samples['rewards'].mean(), float)]
         return samples, samples_info
 
@@ -271,25 +268,25 @@ class ExperienceReplay(Sampler):
         traj_length = 0
         o = env.reset()
         while n_samples <= self.max_experience:
-            a = env.action_space.sample() 
+            a = env.action_space.sample()
             op, r, done, _ = env.step(a)
             self.store(o, a, r, op, done)
             o = op
             traj_length += 1
             n_samples += 1
-            if traj_length > self.max_traj_len or done: 
+            if traj_length > self.max_traj_len or done:
                 o = env.reset()
                 traj_length = 0
                 continue
 
     def store(self, obs, action, reward, obsp, done):
-        if self.replay_size < self.max_experience: self.replay_size += 1
+        if self.replay_size < self.max_experience:
+            self.replay_size += 1
         self._observations[self.head] = obs
-        self._actions[self.head] = action 
+        self._actions[self.head] = action
         self._rewards[self.head] = reward
         self._next_observations[self.head] = obsp
         self._terminals[self.head] = done
         self.head += 1
         if self.head >= self.max_experience:
             self.head = 0
-
