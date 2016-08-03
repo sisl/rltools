@@ -65,9 +65,13 @@ class ParallelSampler(Sampler):
         self.seed_idx2 = 0
 
     def sample(self, sess, itr):
-        state_str = _dumps(self.algo.policy.get_params(sess))
+        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
+            if itr % self.batch_rate == 0:
+                self.batch_size *= 2
+
+        params_str = _dumps(self.algo.policy.get_params(sess))
         get_values(
-            [proxies.client("set_params", state_str, async=True) for proxies in self.proxies])
+            [proxies.client("set_params", params_str, async=True) for proxies in self.proxies])
 
         self.seed_idx2 = self.seed_idx
         batches_sofar = 0
