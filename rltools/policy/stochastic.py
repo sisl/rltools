@@ -75,6 +75,10 @@ class StochasticPolicy(Policy):
             self._num_params = self.get_num_params()
             self._curr_params_P = tfutil.flatcat(self._param_vars)  # Flatten the params and concat
 
+            self._all_param_vars = self.get_variables()
+            self._num_all_params = self.get_num_all_params()
+            self._curr_all_params_PA = tfutil.flatcat(self._all_param_vars)
+
             # Gradients of objective
             self._reinfobj_grad_P = tfutil.flatcat(tf.gradients(self._reinfobj, self._param_vars))
             self._penobj_grad_P = tfutil.flatcat(tf.gradients(self._penobj, self._param_vars))
@@ -92,14 +96,19 @@ class StochasticPolicy(Policy):
             # For updating vars directly, e.g. for PPO
             self._assign_params = tfutil.unflatten_into_vars(self._flatparams_P, self._param_vars)
 
+            self._flatallparams_PA = tf.placeholder(tf.float32, [self._num_all_params],
+                                                    name='flatallparams_PA')
+            self._assign_all_params = tfutil.unflatten_into_vars(self._flatallparams_PA,
+                                                                 self._all_param_vars)
+
             # Treats placeholder self._flatparams_p as gradient for descent
             with tf.variable_scope('optimizer'):
                 self._learning_rate = tf.placeholder(tf.float32, name='learning_rate')
                 vargrads = tfutil.unflatten_into_tensors(
                     self._flatparams_P, [v.get_shape().as_list() for v in self._param_vars])
                 self._take_descent_step = tf.train.AdamOptimizer(
-                    learning_rate=self._learning_rate).apply_gradients(util.safezip(
-                        vargrads, self._param_vars))
+                    learning_rate=self._learning_rate).apply_gradients(
+                        util.safezip(vargrads, self._param_vars))
 
             self._tbwriter = tf.train.SummaryWriter(tblog, graph=tf.get_default_graph())
 
@@ -191,6 +200,14 @@ class StochasticPolicy(Policy):
         params_P = sess.run(self._curr_params_P)
         assert params_P.shape == (self._num_params,)
         return params_P
+
+    def get_state(self, sess):
+        state_PA = sess.run(self._curr_all_params_PA)
+        assert state_PA.shape == (self._num_all_params,)
+        return state_PA
+
+    def set_state(self, sess, state_PA):
+        sess.run(self._assign_all_params, {self._flatallparams_PA: state_PA})
 
     @contextmanager
     def try_params(self, sess, params_D):

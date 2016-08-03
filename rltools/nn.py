@@ -22,6 +22,9 @@ class Model(object):
     def get_num_params(self):
         return sum(v.get_shape().num_elements() for v in self.get_trainable_variables())
 
+    def get_num_all_params(self):
+        return sum(v.get_shape().num_elements() for v in self.get_variables())
+
     @staticmethod
     def _hash_name2array(name2array):
 

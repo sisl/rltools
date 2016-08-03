@@ -76,9 +76,8 @@ class ParallelSampler(Sampler):
             if itr % self.timestep_rate == 0:
                 self.n_timesteps *= 2
 
-        params_str = _dumps(self.algo.policy.get_params(sess))
-        get_values(
-            [proxies.client("set_params", params_str, async=True) for proxies in self.proxies])
+        state_str = _dumps(self.algo.policy.get_state(sess))
+        get_values([proxies.client("set_state", state_str, async=True) for proxies in self.proxies])
 
         self.seed_idx2 = self.seed_idx
         timesteps_sofar = 0
@@ -108,6 +107,7 @@ class ParallelSampler(Sampler):
                     if self.mode == 'centralized':
                         timesteps_sofar += len(traj)
                     elif self.mode == 'decentralized':
+                        assert isinstance(traj, list)
                         timesteps_sofar += np.sum(map(len, traj))
                     else:
                         raise NotImplementedError()
@@ -204,8 +204,8 @@ class RolloutServer(object):
 
         return _dumps(traj)
 
-    def set_params(self, params_str):
-        self.policy.set_params(self.sess, _loads(params_str))
+    def set_state(self, state_str):
+        self.policy.set_state(self.sess, _loads(state_str))
 
 
 def _start_server():
