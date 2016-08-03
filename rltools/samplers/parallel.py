@@ -1,4 +1,4 @@
-from six.moves import cPickle
+import logging
 import os
 import random
 import subprocess
@@ -9,11 +9,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 import numpy as np
 import tensorflow as tf
-
 import zerorpc
 from gevent import Timeout
+
 from rltools.samplers import Sampler, decrollout, rollout
 from rltools.trajutil import TrajBatch, Trajectory
+from six.moves import cPickle
+
+logging.getLogger("gevent_zeromq").setLevel(logging.CRITICAL)
 
 
 class ThreadedSampler(Sampler):
