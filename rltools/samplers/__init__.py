@@ -10,17 +10,17 @@ class Sampler(object):
     Base Sampler class
     """
 
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
-                 adaptive):
+    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
+                 n_timesteps_max, adaptive):
         self.algo = algo
+        self.n_timesteps = n_timesteps
         self.max_traj_len = max_traj_len
         self.adaptive = adaptive
-        self.batch_size = batch_size
+
         if self.adaptive:
-            self.batch_size = min_batch_size
-            self.min_batch_size = min_batch_size
-            self.max_batch_size = max_batch_size
-            self.batch_rate = batch_rate
+            self.timestep_rate = timestep_rate
+            self.n_timesteps_min = n_timesteps_min
+            self.n_timesteps_max = n_timesteps_max
 
     def start(self):
         """Init sampler"""
@@ -31,21 +31,21 @@ class Sampler(object):
         raise NotImplementedError()
 
     def process(self, sess, itr, trajbatch):
-        assert len(trajbatch) == self.batch_size
+        B = len(trajbatch)
         trajlens = [len(traj) for traj in trajbatch]
         maxT = max(trajlens)
 
         rewards_B_T = trajbatch.r.padded(fill=0.)
         assert not self.algo.discount is None
         qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, self.algo.discount)
-        assert qvals_zfilled_B_T.shape == (self.batch_size, maxT)
+        assert qvals_zfilled_B_T.shape == (B, maxT)
         q = RaggedArray([qvals_zfilled_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
         q_B_T = q.padded(fill=np.nan)  # q vals padded with nans in the end
-        assert q_B_T.shape == (self.batch_size, maxT)
+        assert q_B_T.shape == (B, maxT)
 
         # Time-dependent baseline
-        simplev_B_T = np.tile(np.nanmean(q_B_T, axis=0, keepdims=True), (self.batch_size, 1))
-        assert simplev_B_T.shape == (self.batch_size, maxT)
+        simplev_B_T = np.tile(np.nanmean(q_B_T, axis=0, keepdims=True), (B, 1))
+        assert simplev_B_T.shape == (B, maxT)
         simplev = RaggedArray([simplev_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
 
         # State-dependent baseline
@@ -71,11 +71,11 @@ class Sampler(object):
 
         # Compute advantage -- GAE(gamma,lambda) estimator
         v_B_T = v.padded(fill=0.)
-        v_B_Tp1 = np.concatenate([v_B_T, np.zeros((self.batch_size, 1))], axis=1)
-        assert v_B_Tp1.shape == (self.batch_size, maxT + 1)
+        v_B_Tp1 = np.concatenate([v_B_T, np.zeros((B, 1))], axis=1)
+        #assert v_B_Tp1.shape == (B, maxT + 1)
         delta_B_T = rewards_B_T + self.algo.discount * v_B_Tp1[:, 1:] - v_B_Tp1[:, :-1]
         adv_B_T = rltools.util.discount(delta_B_T, self.algo.discount * self.algo.gae_lambda)
-        assert adv_B_T.shape == (self.batch_size, maxT)
+        #assert adv_B_T.shape == (B, maxT)
         adv = RaggedArray([adv_B_T[i, :l] for i, l in enumerate(trajlens)])
         assert np.allclose(adv.padded(fill=0), adv_B_T)
 

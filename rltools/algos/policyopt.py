@@ -11,8 +11,9 @@ class SamplingPolicyOptimizer(RLAlgorithm):
     def __init__(self, env, policy, baseline, step_func, obsfeat_fn=lambda obs: obs, discount=0.99,
                  gae_lambda=1, n_iter=500, start_iter=0, center_adv=True, positive_adv=False,
                  store_paths=False, whole_paths=True, sampler_cls=None,
-                 sampler_args=dict(max_traj_len=200, batch_size=32, adaptive=False,
-                                   min_batch_size=4, max_batch_size=64, batch_rate=40), **kwargs):
+                 sampler_args=dict(max_traj_len=200, n_timesteps=6400, adaptive=False,
+                                   n_timesteps_min=1600, n_timesteps_max=12800, timestep_rate=40),
+                 **kwargs):
         self.env = env
         self.policy = policy
         self.baseline = baseline

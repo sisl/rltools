@@ -18,22 +18,23 @@ from six.moves import cPickle
 
 class ThreadedSampler(Sampler):
 
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
-                 adaptive=False, n_workers=4):
-        super(ThreadedSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size,
-                                              max_batch_size, batch_rate, adaptive)
+    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
+                 n_timesteps_max, adaptive=False, n_workers=4):
+        super(ThreadedSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
+                                              n_timesteps_min, n_timesteps_max, adaptive)
 
         self.n_workers = n_workers
 
     def sample(self, sess, itr):
-        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
-            if itr % self.batch_rate == 0:
-                self.batch_size *= 2
+        if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
+            if itr % self.timestep_rate == 0:
+                self.n_timesteps *= 2
 
         r_func = lambda mtl: rollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(sess, ofeat), mtl, self.algo.policy.action_space)
 
         with ThreadPoolExecutor(self.n_workers) as self.executor:
-            trajs = self.executor.map(r_func, [self.max_traj_len] * self.batch_size)
+            trajs = self.executor.map(r_func, [self.max_traj_len] * int(self.n_timesteps /
+                                                                        self.max_traj_len))  # XXX
 
         if not isinstance(trajs, list):
             trajs = list(trajs)
@@ -44,6 +45,8 @@ class ThreadedSampler(Sampler):
                   float),  # average return for batch of traj
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
+                 ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
+                 ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
                  ('ravg', trajbatch.r.stacked.mean(),
                   int)  # avg reward encountered per time step (probably not that useful)
                 ])
@@ -51,12 +54,14 @@ class ThreadedSampler(Sampler):
 
 class ParallelSampler(Sampler):
 
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
-                 adaptive=False, n_workers=4, mode='centralized'):
-        super(ParallelSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size,
-                                              max_batch_size, batch_rate, adaptive)
+    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
+                 n_timesteps_max, adaptive=False, n_workers=4, mode='centralized',
+                 discard_extra=False):
+        super(ParallelSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
+                                              n_timesteps_min, n_timesteps_max, adaptive)
         self.n_workers = n_workers
         self.mode = mode
+        self.discard_extra = discard_extra
         self.proxies = [
             RolloutProxy(self.algo.env, self.algo.policy, max_traj_len, self.mode, i)
             for i in range(self.n_workers)
@@ -65,16 +70,16 @@ class ParallelSampler(Sampler):
         self.seed_idx2 = 0
 
     def sample(self, sess, itr):
-        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
-            if itr % self.batch_rate == 0:
-                self.batch_size *= 2
+        if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
+            if itr % self.timestep_rate == 0:
+                self.n_timesteps *= 2
 
         params_str = _dumps(self.algo.policy.get_params(sess))
         get_values(
             [proxies.client("set_params", params_str, async=True) for proxies in self.proxies])
 
         self.seed_idx2 = self.seed_idx
-        batches_sofar = 0
+        timesteps_sofar = 0
         seed2traj = {}
         worker2job = {}
 
@@ -98,12 +103,17 @@ class ParallelSampler(Sampler):
                 else:
                     traj = _loads(traj_string)
                     seed2traj[seed_idx] = traj
-                    batches_sofar += 1
-                    if batches_sofar >= self.batch_size:
+                    if self.mode == 'centralized':
+                        timesteps_sofar += len(traj)
+                    elif self.mode == 'decentralized':
+                        timesteps_sofar += np.sum(map(len, traj))
+                    else:
+                        raise NotImplementedError()
+                    if timesteps_sofar >= self.n_timesteps:
                         break
                     else:
                         assign_job_to(i_worker)
-            if batches_sofar >= self.batch_size:
+            if timesteps_sofar >= self.n_timesteps:
                 break
             time.sleep(0.01)
 
@@ -115,17 +125,24 @@ class ParallelSampler(Sampler):
         for (seed, traj) in seed2traj.items():
             if self.mode == 'centralized':
                 trajs.append(traj)
+                timesteps_sofar += len(traj)
             elif self.mode == 'decentralized':
                 trajs.extend(traj)
-            self.seed_idx += 1
+                timesteps_sofar += np.sum(map(len, traj))
 
-        trajbatch = TrajBatch.FromTrajs(trajs[:self.batch_size])
-        assert len(trajbatch) == self.batch_size, len(trajbatch)
+            self.seed_idx += 1
+            if self.discard_extra and timesteps_sofar >= self.n_timesteps:
+                break
+
+        trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,
                 [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
                   float),  # average return for batch of traj
+                 ('batch', len(trajbatch), int),  # batch size
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
+                 ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
+                 ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
                  ('ravg', trajbatch.r.stacked.mean(),
                   int)  # avg reward encountered per time step (probably not that useful)
                 ])
@@ -148,7 +165,7 @@ class RolloutProxy(object):
 
         self.popen = subprocess.Popen(
             ["python2", "-m", "rltools.samplers.parallel", self.f.name, addr], env=oenv)
-        if sys.platform == "linux2":
+        if sys.platform in ["linux2", "linux"]:
             subprocess.check_call(["taskset", "-cp", str(idx), str(self.popen.pid)])
 
         self.client = zerorpc.Client(heartbeat=60, timeout=1000)

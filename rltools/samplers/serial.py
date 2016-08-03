@@ -9,29 +9,36 @@ from rltools.trajutil import TrajBatch, Trajectory
 
 class SimpleSampler(Sampler):
 
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
-                 adaptive=False):
-        super(SimpleSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size,
-                                            max_batch_size, batch_rate, adaptive)
+    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
+                 n_timesteps_max, adaptive=False):
+        super(SimpleSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
+                                            n_timesteps_min, n_timesteps_max, adaptive)
 
     def sample(self, sess, itr):
-        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
-            if itr % self.batch_rate == 0:
-                self.batch_size *= 2
+        if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
+            if itr % self.timestep_rate == 0:
+                self.n_timesteps *= 2
 
         trajs = []
-        for _ in range(self.batch_size):
-            trajs.append(
-                rollout(self.algo.env, self.algo.obsfeat_fn,
-                        lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
-                        self.max_traj_len, self.algo.policy.action_space))
+        timesteps_sofar = 0
+        while True:
+            traj = rollout(self.algo.env, self.algo.obsfeat_fn,
+                           lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                           self.max_traj_len, self.algo.policy.action_space)
+            trajs.append(traj)
+            timesteps_sofar += len(traj)
+            if timesteps_sofar >= self.n_timesteps:
+                break
 
         trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,
                 [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
                   float),  # average return for batch of traj
+                 ('batch', len(trajbatch), int),  # batch size                 
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
+                 ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
+                 ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
                  ('ravg', trajbatch.r.stacked.mean(),
                   int)  # avg reward encountered per time step (probably not that useful)
                 ])
@@ -39,33 +46,37 @@ class SimpleSampler(Sampler):
 
 class DecSampler(Sampler):
 
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
-                 adaptive=False):
-        super(DecSampler, self).__init__(algo, max_traj_len, batch_size, min_batch_size,
-                                         max_batch_size, batch_rate, adaptive)
+    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
+                 n_timesteps_max, adaptive=False):
+        super(DecSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
+                                         n_timesteps_min, n_timesteps_max, adaptive)
 
     def sample(self, sess, itr):
-        assert self.batch_size >= self.algo.env.total_agents, 'Batch size should be at least as large as number of agents'
-        assert self.batch_size % self.algo.env.total_agents == 0, 'Batch size should be evenly divisible by number of agents'
-        if self.adaptive and itr > 0 and self.batch_size < self.max_batch_size:
-            if itr % self.batch_rate == 0:
-                self.batch_size *= 2
+        if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
+            if itr % self.timestep_rate == 0:
+                self.n_timesteps *= 2
 
         env = self.algo.env
         trajs = []
-        for _ in range(self.batch_size /
-                       env.total_agents):  #FIXME: batch size depends on number of agents
-            trajs.extend(
-                decrollout(self.algo.env, self.algo.obsfeat_fn,
-                           lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
-                           self.max_traj_len, self.algo.policy.action_space))
+        timesteps_sofar = 0
+        while True:
+            ag_trajs = decrollout(self.algo.env, self.algo.obsfeat_fn,
+                                  lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                                  self.max_traj_len, self.algo.policy.action_space)
+            trajs.extend(ag_trajs)
+            timesteps_sofar += np.sum(map(len, ag_trajs))
+            if timesteps_sofar >= self.n_timesteps:
+                break
 
         trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,
                 [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
                   float),  # average return for batch of traj
+                 ('batch', len(trajbatch), int),  # batch size                 
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
+                 ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
+                 ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
                  ('ravg', trajbatch.r.stacked.mean(),
                   int)  # avg reward encountered per time step (probably not that useful)
                 ])
@@ -76,11 +87,13 @@ class ImportanceWeightedSampler(SimpleSampler):
     Alternate between sampling iterations using simple sampler and importance sampling iterations
 
     Does not work with a NN value function baseline
+
+    #FIXME
     """
 
-    def __init__(self, algo, max_traj_len, batch_size, min_batch_size, max_batch_size, batch_rate,
-                 adaptive=False, n_backtrack='all', randomize_draw=False, n_pretrain=0,
-                 skip_is=False, max_is_ratio=0):
+    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
+                 n_timesteps_max, adaptive=False, n_backtrack='all', randomize_draw=False,
+                 n_pretrain=0, skip_is=False, max_is_ratio=0):
         """
         n_backtrack: number of past policies to update from
         n_pretrain: iteration number until which to only do importance sampling
@@ -94,9 +107,9 @@ class ImportanceWeightedSampler(SimpleSampler):
         self.max_is_ratio = max_is_ratio
         self._hist = []
         self._is_itr = 0
-        super(ImportanceWeightedSampler, self).__init__(algo, max_traj_len, batch_size,
-                                                        min_batch_size, max_batch_size, batch_rate,
-                                                        adaptive)
+        super(ImportanceWeightedSampler, self).__init__(algo, n_timesteps, max_traj_len,
+                                                        timestep_rate, n_timesteps_min,
+                                                        n_timesteps_max, adaptive)
         assert not self.adaptive, "Can't use adaptive sampling with importance weighted for now"  # TODO needed?
 
     @property
