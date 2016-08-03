@@ -1,4 +1,3 @@
-import logging
 import os
 import random
 import subprocess
@@ -15,8 +14,6 @@ from gevent import Timeout
 from rltools.samplers import Sampler, decrollout, rollout
 from rltools.trajutil import TrajBatch, Trajectory
 from six.moves import cPickle
-
-logging.getLogger("gevent_zeromq").setLevel(logging.CRITICAL)
 
 
 class ThreadedSampler(Sampler):
