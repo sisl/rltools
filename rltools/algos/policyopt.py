@@ -12,8 +12,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                  gae_lambda=1, n_iter=500, start_iter=0, center_adv=True, positive_adv=False,
                  store_paths=False, whole_paths=True, sampler_cls=None,
                  sampler_args=dict(max_traj_len=200, n_timesteps=6400, adaptive=False,
-                                   n_timesteps_min=1600, n_timesteps_max=12800, timestep_rate=40),
-                 **kwargs):
+                                   n_timesteps_min=1600, n_timesteps_max=12800, timestep_rate=40,
+                                   enable_rewnorm=True), **kwargs):
         self.env = env
         self.policy = policy
         self.baseline = baseline
@@ -30,7 +30,6 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         if sampler_cls is None:
             sampler_cls = SimpleSampler
         self.sampler = sampler_cls(self, **sampler_args)
-
         self.total_time = 0.0
 
     def train(self, sess, log, save_freq):
@@ -49,7 +48,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                     trajbatch0, _ = self.sampler.sample(sess, itr)
                     self.policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
                     self.baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-
+                    self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
                 trajbatch, sample_info_fields = self.sampler.sample(sess, itr)
 
             # Compute baseline
@@ -62,7 +61,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 step_print_fields = self.step_func(sess, self.policy, trajbatch,
                                                    trajbatch_vals['advantage'])
                 self.policy.update_obsnorm(sess, trajbatch.obsfeat.stacked)
-
+                self.sampler.rewnorm.update(sess, trajbatch.r.stacked[:, None])
         # LOG
         self.total_time += t_all.dt
 

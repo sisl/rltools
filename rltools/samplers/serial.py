@@ -10,9 +10,10 @@ from rltools.trajutil import TrajBatch, Trajectory
 class SimpleSampler(Sampler):
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False):
+                 n_timesteps_max, adaptive=False, enable_rewnorm=True):
         super(SimpleSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                            n_timesteps_min, n_timesteps_max, adaptive)
+                                            n_timesteps_min, n_timesteps_max, adaptive,
+                                            enable_rewnorm)
 
     def sample(self, sess, itr):
         if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
@@ -47,9 +48,9 @@ class SimpleSampler(Sampler):
 class DecSampler(Sampler):
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False):
+                 n_timesteps_max, adaptive=False, enable_rewnorm=True):
         super(DecSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                         n_timesteps_min, n_timesteps_max, adaptive)
+                                         n_timesteps_min, n_timesteps_max, adaptive, enable_rewnorm)
 
     def sample(self, sess, itr):
         if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
@@ -92,8 +93,8 @@ class ImportanceWeightedSampler(SimpleSampler):
     """
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False, n_backtrack='all', randomize_draw=False,
-                 n_pretrain=0, skip_is=False, max_is_ratio=0):
+                 n_timesteps_max, adaptive=False, enable_rewnorm=True, n_backtrack='all',
+                 randomize_draw=False, n_pretrain=0, skip_is=False, max_is_ratio=0):
         """
         n_backtrack: number of past policies to update from
         n_pretrain: iteration number until which to only do importance sampling
@@ -109,7 +110,7 @@ class ImportanceWeightedSampler(SimpleSampler):
         self._is_itr = 0
         super(ImportanceWeightedSampler, self).__init__(algo, n_timesteps, max_traj_len,
                                                         timestep_rate, n_timesteps_min,
-                                                        n_timesteps_max, adaptive)
+                                                        n_timesteps_max, adaptive, enable_rewnorm)
         assert not self.adaptive, "Can't use adaptive sampling with importance weighted for now"  # TODO needed?
 
     @property
