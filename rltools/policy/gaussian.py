@@ -6,12 +6,15 @@ import tensorflow as tf
 from rltools import nn, tfutil
 from rltools.distributions import Gaussian
 from rltools.policy.stochastic import StochasticPolicy
+from rltools.util import EzPickle
 
 
-class GaussianMLPPolicy(StochasticPolicy):
+class GaussianMLPPolicy(StochasticPolicy, EzPickle):
 
     def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
                  init_logstdev, tblog, varscope_name):
+        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
+                          init_logstdev, tblog, varscope_name)
         self.hidden_spec = hidden_spec
         self.min_stdev = min_stdev
         self.init_logstdev = init_logstdev

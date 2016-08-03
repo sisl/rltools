@@ -6,12 +6,15 @@ import tensorflow as tf
 from rltools import nn, tfutil
 from rltools.distributions import Categorical, RecurrentCategorical
 from rltools.policy.stochastic import StochasticPolicy
+from rltools.util import EzPickle
 
 
-class CategoricalMLPPolicy(StochasticPolicy):
+class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
 
     def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, tblog,
                  varscope_name):
+        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, tblog,
+                          varscope_name)
         self.hidden_spec = hidden_spec
         self._dist = Categorical(action_space.n)
         super(CategoricalMLPPolicy, self).__init__(obsfeat_space, action_space, action_space.n,
