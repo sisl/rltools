@@ -59,35 +59,6 @@ class DecSampler(Sampler):
                 decrollout(self.algo.env, self.algo.obsfeat_fn,
                            lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
                            self.max_traj_len, self.algo.policy.action_space))
-            # old_ob = env.reset()
-            # obs, obsfeat, actions, actiondists, rewards = get_lists(5, env.total_agents)
-            # for itr in range(self.max_traj_len):
-            #     agent_actions = []
-            #     for i, agent_obs in enumerate(old_ob):
-            #         if agent_obs is None:
-            #             continue
-            #         obs[i].append(np.expand_dims(agent_obs, 0))
-            #         obsfeat[i].append(self.algo.obsfeat_fn(obs[i][-1]))
-            #         a, adist = self.algo.policy.sample_actions(sess, obsfeat[i][-1])
-            #         agent_actions.append(a)
-            #         actions[i].append(a)
-            #         actiondists[i].append(adist)
-            #     new_ob, r, done, _ = env.step(np.array(agent_actions)[:, 0, 0])  #FIXME
-            #     for i, o in enumerate(old_ob):
-            #         if o is None:
-            #             continue
-            #         rewards[i].append(r)
-            #         old_ob = new_ob
-            #     if done:
-            #         break
-
-            # for agnt in range(env.total_agents):
-            #     obs_T_Do = np.concatenate(obs[agnt])
-            #     obsfeat_T_Df = np.concatenate(obsfeat[agnt])
-            #     adist_T_Pa = np.concatenate(actiondists[agnt])
-            #     a_T_Da = np.concatenate(actions[agnt])
-            #     r_T = np.asarray(rewards[agnt])
-            #     trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
 
         trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,

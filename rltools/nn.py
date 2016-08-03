@@ -120,7 +120,6 @@ class AffineLayer(Layer):
         self._output_shape = (output_shape[0],)
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if initializer is None:
-                # initializer = tf.truncated_normal_initializer(mean=0., stddev=np.sqrt(2./input_shape[0]))
                 initializer = tf.contrib.layers.xavier_initializer()
             self.W_Di_Do = tf.get_variable('W', shape=[input_shape[0], output_shape[0]],
                                            initializer=initializer)
@@ -169,7 +168,6 @@ class ConvLayer(Layer):
         self._output_shape = (Oh, Ow, Co)
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if initializer is None:
-                # initializer = tf.truncated_normal_initializer(mean=0., stddev=np.sqrt(2./(Fh*Fw*Ci)))
                 initializer = tf.contrib.layers.xavier_initializer()
             self.W_Fh_Fw_Ci_Co = tf.get_variable('W', shape=[Fh, Fw, Ci, Co],
                                                  initializer=initializer)
