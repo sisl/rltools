@@ -36,7 +36,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         for itr in range(self.start_iter, self.n_iter):
             iter_info = self.step(sess, itr)
             log.write(iter_info, print_header=itr % 20 == 0)
-            if itr % save_freq == 0:
+            if itr % save_freq == 0 or itr % self.n_iter:
                 log.write_snapshot(sess, self.policy, itr)
 
     def step(self, sess, itr):
