@@ -10,20 +10,15 @@ from rltools import util
 
 class Model(object):
 
-    def get_variables(self):
-        """Get all variables in the graph"""
+    def get_variables(self, trainable=False):
+        """Get all or trainable variables in the graph"""
+        if trainable:
+            assert self.varscope
+            return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.varscope.name)
         return tf.get_collection(tf.GraphKeys.VARIABLES, self.varscope.name)
 
-    def get_trainable_variables(self):
-        """Get trainable variables in the graph"""
-        assert self.varscope
-        return tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, self.varscope.name)
-
-    def get_num_params(self):
-        return sum(v.get_shape().num_elements() for v in self.get_trainable_variables())
-
-    def get_num_all_params(self):
-        return sum(v.get_shape().num_elements() for v in self.get_variables())
+    def get_num_params(self, trainable=False):
+        return sum(v.get_shape().num_elements() for v in self.get_variables(trainable=trainable))
 
     @staticmethod
     def _hash_name2array(name2array):

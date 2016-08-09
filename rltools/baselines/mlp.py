@@ -40,8 +40,8 @@ class MLPBaseline(Baseline, nn.Model):
             self.val_B = self._make_val_op(self.obsfeat_B_Df, scaled_t_B_1)
 
         # Only code above has trainable vars
-        self.param_vars = self.get_trainable_variables()
-        self._num_params = self.get_num_params()
+        self.param_vars = self.get_variables(trainable=True)
+        self._num_params = self.get_num_params(trainable=True)
         self._curr_params_P = tfutil.flatcat(self.param_vars)
 
         # Squared loss for fitting the value function
@@ -70,8 +70,8 @@ class MLPBaseline(Baseline, nn.Model):
         with tf.variable_scope('hidden'):
             net = nn.FeedforwardNet(net_input, (self.obsfeat_space.shape[0] + 1,), self.hidden_spec)
         with tf.variable_scope('out'):
-            out_layer = nn.AffineLayer(net.output, net.output_shape,
-                                       (1,), initializer=tf.zeros_initializer)
+            out_layer = nn.AffineLayer(net.output, net.output_shape, (1,),
+                                       initializer=tf.zeros_initializer)
             assert out_layer.output_shape == (1,)
         return out_layer.output[:, 0]
 

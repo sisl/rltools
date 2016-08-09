@@ -18,7 +18,8 @@ class ValuePolicy(Policy):
 
         with tf.variable_scope(varscope_name) as self.varscope:
             batch_size = None
-            assert isinstance(self.action_space, spaces.Discrete), "Value policy support only discrete action spaces"
+            assert isinstance(self.action_space,
+                              spaces.Discrete), "Value policy support only discrete action spaces"
             action_type = tf.int32
             action_dim = 1
             # Action distribution for current policy
@@ -34,12 +35,11 @@ class ValuePolicy(Policy):
                 action_type, [batch_size, action_dim],
                 name='input_actions_B_Da')  # Action dims FIXME type
 
-
             # All trainable vars done (only _make_* methods)
 
             # Reading params
-            self._param_vars = self.get_trainable_variables()
-            self._num_params = self.get_num_params()
+            self._param_vars = self.get_variables(trainable=True)
+            self._num_params = self.get_num_params(trainable=True)
             self._curr_params_P = tfutil.flatcat(self._param_vars)  # Flatten the params and concat
 
             # Writing params
@@ -77,8 +77,7 @@ class ValuePolicy(Policy):
         """
         actiondist_B_Pa = self.compute_actionvals(sess, obsfeat_B_Df)
         a, _ = self.sample_actions(sess, obsfeat_B_Df, deterministic=True)
-        return a[0,0]
-
+        return a[0, 0]
 
     # TODO penobj computes
 
@@ -96,4 +95,3 @@ class ValuePolicy(Policy):
         self.set_params(sess, params_D)
         yield  # Do what you gotta do
         self.set_params(sess, orig_params_D)
-

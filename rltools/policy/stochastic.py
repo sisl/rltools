@@ -71,12 +71,12 @@ class StochasticPolicy(Policy):
             # All trainable vars done (only _make_* methods)
 
             # Reading params
-            self._param_vars = self.get_trainable_variables()
-            self._num_params = self.get_num_params()
+            self._param_vars = self.get_variables(trainable=True)
+            self._num_params = self.get_num_params(trainable=True)
             self._curr_params_P = tfutil.flatcat(self._param_vars)  # Flatten the params and concat
 
             self._all_param_vars = self.get_variables()
-            self._num_all_params = self.get_num_all_params()
+            self._num_all_params = self.get_num_params()
             self._curr_all_params_PA = tfutil.flatcat(self._all_param_vars)
 
             # Gradients of objective
