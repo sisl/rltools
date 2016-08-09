@@ -140,7 +140,7 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
         def hvpx0_func(v):
 
             def klgrad_func(p):
-                with model.try_params(sess, params0):
+                with model.try_params(sess, p):
                     klgrad = compute_hvp_helper(sess, *subsamp_feed)
                 return klgrad
 
