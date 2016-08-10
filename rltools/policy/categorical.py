@@ -30,7 +30,7 @@ class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
                 flatshape = (np.prod(obsfeat_B_Df.shape[1:]),)
                 flatobsfeat_B_Df = nn.ReshapeLayer(obsfeat_B_Df, flatshape).output
         else:
-            flatshape = self.observation_space.shape
+            flatshape = self.obsfeat_space.shape
             flatobsfeat_B_Df = obsfeat_B_Df
         with tf.variable_scope('hidden'):
             net = nn.FeedforwardNet(flatobsfeat_B_Df, flatshape, self.hidden_spec)
