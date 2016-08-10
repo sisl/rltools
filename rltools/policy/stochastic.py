@@ -29,19 +29,22 @@ class StochasticPolicy(Policy):
                 action_dim = self.action_space.shape[0]
             else:
                 raise NotImplementedError()
+
             # Action distribution for current policy
             self._obsfeat_B_Df = tf.placeholder(
                 tf.float32, list((batch_size,) + self.obsfeat_space.shape),
                 name='obsfeat_B_Df')  # Df = feature dimensions FIXME shape
             with tf.variable_scope('obsnorm'):
                 self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
+                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
             self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
+
             self._actiondist_B_Pa = self._make_actiondist_ops(
                 self._normalized_obsfeat_B_Df)  # Pa = action distribution params
             self._input_action_B_Da = tf.placeholder(
                 action_type, [batch_size, action_dim],
                 name='input_actions_B_Da')  # Action dims FIXME type
+
             self._logprobs_B = self._make_actiondist_logprobs_ops(self._actiondist_B_Pa,
                                                                   self._input_action_B_Da)
 
@@ -216,6 +219,6 @@ class StochasticPolicy(Policy):
         yield  # Do what you gotta do
         self.set_params(sess, orig_params_D)
 
-    def take_desent_step(self, sess, grad_P, learning_rate):
+    def take_descent_step(self, sess, grad_P, learning_rate):
         sess.run(self._take_descent_step, {self._flatparams_P: grad_P,
                                            self._learning_rate: learning_rate})

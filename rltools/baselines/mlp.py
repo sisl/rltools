@@ -27,13 +27,13 @@ class MLPBaseline(Baseline, nn.Model):
         with tf.variable_scope(varscope_name) as self.varscope:
             with tf.variable_scope('obsnorm'):
                 self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
+                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
             with tf.variable_scope('vnorm'):
                 self.vnorm = (nn.Standardizer if enable_vnorm else nn.NoOpStandardizer)(1)
 
             batch_size = None
             self.obsfeat_B_Df = tf.placeholder(tf.float32,
-                                               [batch_size, self.obsfeat_space.shape[0]],
+                                               list((batch_size,) + self.obsfeat_space.shape),
                                                name='obsfeat_B_Df')  # FIXME shape
             self.t_B_1 = tf.placeholder(tf.float32, [batch_size, 1], name='t_B')
             scaled_t_B_1 = self.t_B_1 * self.time_scale

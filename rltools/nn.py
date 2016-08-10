@@ -287,10 +287,10 @@ class NoOpStandardizer(object):
 
 class Standardizer(Model):
 
-    def __init__(self, dim, eps=1e-6, init_count=0, init_mean=0., init_meansq=1.):
+    def __init__(self, shape, eps=1e-6, init_count=0, init_mean=0., init_meansq=1.):
         """
         Args:
-            dim: dimension of the space of points to be standardized
+            shape: dimension of the space of points to be standardized
             eps: small constant to add to denominators to prevent division by 0
             init_count, init_mean, init_meansq: initial values for accumulators
 
@@ -300,14 +300,19 @@ class Standardizer(Model):
             replace them with values from a new batch of data.
         """
         self._eps = eps
-        self._dim = dim
+        if isinstance(shape, int):
+            shape = (shape,)
+        self._shape = shape
         with tf.variable_scope(type(self).__name__) as self.varscope:
-            self._count = tf.get_variable('count', shape=(
-                1,), initializer=tf.constant_initializer(init_count), trainable=False)
-            self._mean_1_D = tf.get_variable('mean_1_D', shape=(
-                1, self._dim), initializer=tf.constant_initializer(init_mean), trainable=False)
-            self._meansq_1_D = tf.get_variable('meansq_1_D', shape=(
-                1, self._dim), initializer=tf.constant_initializer(init_meansq), trainable=False)
+            self._count = tf.get_variable('count', shape=(1,),
+                                          initializer=tf.constant_initializer(init_count),
+                                          trainable=False)
+            self._mean_1_D = tf.get_variable('mean_1_D', shape=(1,) + self._shape,
+                                             initializer=tf.constant_initializer(init_mean),
+                                             trainable=False)
+            self._meansq_1_D = tf.get_variable('meansq_1_D', shape=(1,) + self._shape,
+                                               initializer=tf.constant_initializer(init_meansq),
+                                               trainable=False)
             self._stdev_1_D = tf.sqrt(self._meansq_1_D - tf.square(self._mean_1_D) + self._eps)
 
     def get_mean(self, sess):
@@ -324,7 +329,7 @@ class Standardizer(Model):
         return sess.run(self._count)
 
     def update(self, sess, points_N_D):
-        assert points_N_D.ndim == 2 and points_N_D.shape[1] == self._dim
+        assert points_N_D.ndim >= 2 and points_N_D.shape[1:] == self._shape
         num = points_N_D.shape[0]
         count = self.get_count(sess)
         a = count / (count + num)
@@ -342,14 +347,14 @@ class Standardizer(Model):
         return y_B_D * (self._stdev_1_D + self._eps) + self._mean_1_D
 
     def standardize(self, sess, x_B_D, centered=True):
-        assert x_B_D.ndim == 2
+        assert x_B_D.ndim >= 2
         mu = 0.
         if centered:
             mu = self.get_mean(sess)
         return (x_B_D - mu) / (self.get_stdev(sess) + self._eps)
 
     def unstandardize(self, sess, y_B_D, centered=True):
-        assert y_B_D.ndim == 2
+        assert y_B_D.ndim >= 2
         mu = 0.
         if centered:
             mu = self.get_mean(sess)
