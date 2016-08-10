@@ -72,7 +72,7 @@ class MLPBaseline(Baseline, nn.Model):
                 flatshape = (np.prod(obsfeat_B_Df.get_shape().as_list()[1:]),)
                 flatobsfeat_B_Df = nn.ReshapeLayer(obsfeat_B_Df, flatshape).output
         else:
-            flatshape = self.observation_space.shape
+            flatshape = self.obsfeat_space.shape
             flatobsfeat_B_Df = obsfeat_B_Df
         net_input = tf.concat(1, [flatobsfeat_B_Df, scaled_t_B_1])
         with tf.variable_scope('hidden'):
