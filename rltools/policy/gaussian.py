@@ -32,8 +32,16 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
         return self._dist
 
     def _make_actiondist_ops(self, obsfeat_B_Df):
+        if len(obsfeat_B_Df.get_shape()) > 2:
+            with tf.variable_scope('in'):
+                flatshape = (np.prod(obsfeat_B_Df.get_shape().as_list()[1:]),)
+                flatobsfeat_B_Df = nn.ReshapeLayer(obsfeat_B_Df, flatshape).output
+        else:
+            flatshape = self.observation_space.shape
+            flatobsfeat_B_Df = obsfeat_B_Df
+
         with tf.variable_scope('hidden'):
-            net = nn.FeedforwardNet(obsfeat_B_Df, self.obsfeat_space.shape, self.hidden_spec)
+            net = nn.FeedforwardNet(flatobsfeat_B_Df, flatshape, self.hidden_spec)
         with tf.variable_scope('out'):
             mean_layer = nn.AffineLayer(net.output, net.output_shape, self.action_space.shape,
                                         initializer=tf.zeros_initializer)

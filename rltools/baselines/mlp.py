@@ -1,5 +1,6 @@
 from contextlib import contextmanager
 
+import numpy as np
 import tensorflow as tf
 
 from rltools import nn, optim, tfutil
@@ -66,9 +67,16 @@ class MLPBaseline(Baseline, nn.Model):
             compute_hvp_helper=self.compute_klgrad)
 
     def _make_val_op(self, obsfeat_B_Df, scaled_t_B_1):
-        net_input = tf.concat(1, [obsfeat_B_Df, scaled_t_B_1])
+        if len(obsfeat_B_Df.get_shape()) > 2:
+            with tf.variable_scope('in'):
+                flatshape = (np.prod(obsfeat_B_Df.get_shape().as_list()[1:]),)
+                flatobsfeat_B_Df = nn.ReshapeLayer(obsfeat_B_Df, flatshape).output
+        else:
+            flatshape = self.observation_space.shape
+            flatobsfeat_B_Df = obsfeat_B_Df
+        net_input = tf.concat(1, [flatobsfeat_B_Df, scaled_t_B_1])
         with tf.variable_scope('hidden'):
-            net = nn.FeedforwardNet(net_input, (self.obsfeat_space.shape[0] + 1,), self.hidden_spec)
+            net = nn.FeedforwardNet(net_input, (flatshape[0] + 1,), self.hidden_spec)
         with tf.variable_scope('out'):
             out_layer = nn.AffineLayer(net.output, net.output_shape, (1,),
                                        initializer=tf.zeros_initializer)
