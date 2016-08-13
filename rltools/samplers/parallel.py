@@ -13,7 +13,7 @@ import zerorpc
 from gevent import Timeout
 from zerorpc.gevent_zmq import logger as gevent_log
 
-from rltools.samplers import Sampler, decrollout, rollout
+from rltools.samplers import Sampler, decrollout, centrollout
 from rltools.trajutil import TrajBatch, Trajectory
 from six.moves import cPickle
 
@@ -35,7 +35,7 @@ class ThreadedSampler(Sampler):
             if itr % self.timestep_rate == 0:
                 self.n_timesteps *= 2
 
-        r_func = lambda mtl: rollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(sess, ofeat), mtl, self.algo.policy.action_space)
+        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(sess, ofeat), mtl, self.algo.policy.action_space)
 
         with ThreadPoolExecutor(self.n_workers) as self.executor:
             trajs = self.executor.map(r_func, [self.max_traj_len] * int(self.n_timesteps /
@@ -193,12 +193,12 @@ class RolloutServer(object):
         self.action_space = action_space
         self.mode = mode
         if self.mode == 'centralized':
-            self.rollout_fn = rollout
+            self.rollout_fn = centrollout
         elif self.mode == 'decentralized':
             self.rollout_fn = decrollout
 
     def sample(self, seed):
-        #self.env.seed(seed)
+        self.env.seed(seed)
         np.random.seed(seed)
         tf.set_random_seed(seed)
         random.seed(seed)
