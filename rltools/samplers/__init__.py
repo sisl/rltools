@@ -90,9 +90,10 @@ class Sampler(object):
         raise NotImplementedError()
 
 
-def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+def centrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+    assert env.reward_mech == 'global'
     obs, obsfeat, actions, actiondists, rewards = [], [], [], [], []
-    obs.append((env.reset())[None, ...].copy())
+    obs.append(np.c_[env.reset()].ravel()[None, ...].copy())
 
     for itr in range(max_traj_len):
         obsfeat.append(obsfeat_fn(obs[-1]))
@@ -109,11 +110,12 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
         else:
             o2, r, done, _ = env.step(actions[-1][0])
 
-        rewards.append(r)
+        assert (r == r[0]).all()
+        rewards.append(r[0])
         if done:
             break
         if itr != max_traj_len - 1:
-            obs.append(o2[None, ...])
+            obs.append(np.c_[o2].ravel()[None, ...])
 
     obs_T_Do = np.concatenate(obs)
     assert obs_T_Do.shape[0] == len(obs), '{} != {}'.format(obs_T_Do.shape, len(obs))
@@ -139,7 +141,7 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
 
     trajs = []
     old_obs = env.reset()
-    obs, obsfeat, actions, actiondists, rewards = get_lists(5, env.total_agents)
+    obs, obsfeat, actions, actiondists, rewards = get_lists(5, len(env.agents))
 
     for itr in range(max_traj_len):
         agent_actions = []
@@ -162,13 +164,13 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
         for i, o in enumerate(old_obs):
             if o is None:
                 continue
-            rewards[i].append(r)
+            rewards[i].append(r[i])
         old_obs = new_obs
 
         if done:
             break
 
-    for agnt in range(env.total_agents):
+    for agnt in range(len(env.agents)):
         obs_T_Do = np.concatenate(obs[agnt])
         obsfeat_T_Df = np.concatenate(obsfeat[agnt])
         adist_T_Pa = np.concatenate(actiondists[agnt])
