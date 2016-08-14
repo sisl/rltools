@@ -131,14 +131,18 @@ def centrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
     return Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T)
 
 
+def get_lists(nl, na):
+    l = []
+    for i in range(nl):
+        l.append([[] for j in range(na)])
+    return l
+
+
 def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+    if not isinstance(act_fn, list):
+        act_fn = [act_fn for _ in env.agents]
 
-    def get_lists(nl, na):
-        l = []
-        for i in range(nl):
-            l.append([[] for j in range(na)])
-        return l
-
+    assert len(act_fn) == len(env.agents)
     trajs = []
     old_obs = env.reset()
     obs, obsfeat, actions, actiondists, rewards = get_lists(5, len(env.agents))
@@ -150,7 +154,7 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
                 continue
             obs[i].append(np.expand_dims(agent_obs, 0))
             obsfeat[i].append(obsfeat_fn(obs[i][-1]))
-            a, adist = act_fn(obsfeat[i][-1])
+            a, adist = act_fn[i](obsfeat[i][-1])
             agent_actions.append(a)
             actions[i].append(a)
             actiondists[i].append(adist)
