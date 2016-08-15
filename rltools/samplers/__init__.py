@@ -32,14 +32,14 @@ class Sampler(object):
         """Collect samples"""
         raise NotImplementedError()
 
-    def process(self, sess, itr, trajbatch):
+    def process(self, sess, itr, trajbatch, discount, gae_lambda, baseline):
         B = len(trajbatch)
         trajlens = [len(traj) for traj in trajbatch]
         maxT = max(trajlens)
 
         rewards_B_T = self.rewnorm.standardize(sess, trajbatch.r.padded(fill=0.), centered=False)
         assert not self.algo.discount is None
-        qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, self.algo.discount)
+        qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, discount)
         assert qvals_zfilled_B_T.shape == (B, maxT)
         q = RaggedArray([qvals_zfilled_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
         q_B_T = q.padded(fill=np.nan)  # q vals padded with nans in the end
@@ -51,7 +51,7 @@ class Sampler(object):
         simplev = RaggedArray([simplev_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
 
         # State-dependent baseline
-        v_stacked = self.algo.baseline.predict(sess, trajbatch)
+        v_stacked = baseline.predict(sess, trajbatch)
         assert v_stacked.ndim == 1
         v = RaggedArray(v_stacked, lengths=trajlens)
 
@@ -75,14 +75,14 @@ class Sampler(object):
         v_B_T = v.padded(fill=0.)
         v_B_Tp1 = np.concatenate([v_B_T, np.zeros((B, 1))], axis=1)
         #assert v_B_Tp1.shape == (B, maxT + 1)
-        delta_B_T = rewards_B_T + self.algo.discount * v_B_Tp1[:, 1:] - v_B_Tp1[:, :-1]
-        adv_B_T = rltools.util.discount(delta_B_T, self.algo.discount * self.algo.gae_lambda)
+        delta_B_T = rewards_B_T + discount * v_B_Tp1[:, 1:] - v_B_Tp1[:, :-1]
+        adv_B_T = rltools.util.discount(delta_B_T, discount * gae_lambda)
         #assert adv_B_T.shape == (B, maxT)
         adv = RaggedArray([adv_B_T[i, :l] for i, l in enumerate(trajlens)])
         assert np.allclose(adv.padded(fill=0), adv_B_T)
 
         # Fit for the next time step
-        baseline_info = self.algo.baseline.fit(sess, trajbatch, q.stacked)
+        baseline_info = baseline.fit(sess, trajbatch, q.stacked)
 
         return dict(advantage=adv, qval=q, v_r=vfunc_r2, tv_r=simplev_r2), baseline_info
 
