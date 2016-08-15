@@ -149,7 +149,7 @@ class ParallelSampler(Sampler):
                 timesteps_sofar += np.sum(map(len, traj))
             elif self.mode == 'concurrent':
                 assert isinstance(traj, list)
-                for tid, tr in traj:
+                for tid, tr in enumerate(traj):
                     trajs[tid].append(tr)
 
                 timesteps_sofar += np.sum(map(len, traj[0]))
