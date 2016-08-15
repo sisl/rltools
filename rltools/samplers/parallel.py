@@ -254,8 +254,8 @@ class RolloutServer(object):
 
     def set_state(self, state_str):
         if self.mode == 'concurrent':
-            [policy.set_state(self.sess, _loads(state_str[agid])) for policy in enumerate(
-                self.policy)]
+            [policy.set_state(self.sess, _loads(state_str[agid]))
+             for agid, policy in enumerate(self.policy)]
         else:
             self.policy.set_state(self.sess, _loads(state_str))
 
