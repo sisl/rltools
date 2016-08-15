@@ -22,6 +22,7 @@ class Sampler(object):
             self.timestep_rate = timestep_rate
             self.n_timesteps_min = n_timesteps_min
             self.n_timesteps_max = n_timesteps_max
+        self.n_episodes = 0
 
     def start(self):
         """Init sampler"""
