@@ -146,7 +146,8 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                 params_P_ag = [policy.get_params(sess) for policy in self.policies]
                 weightparams_P = np.sum([w * p for w, p in util.safezip(self.weights, params_P_ag)])
                 if itr == 0:
-                    blendparams_P = weightparams_P
+                    blendparams_P = 0.001 * self.target_policy.get_params(
+                        sess) + 0.999 * weightparams_P
                 if itr > 1 and (itr % blend_freq == 0 or itr % self.n_iter):
                     blendparams_P = self.interp_alpha * self.target_policy.get_params(sess) + (
                         1 - self.interp_alpha) * weightparams_P
