@@ -122,7 +122,7 @@ class ParallelSampler(Sampler):
                         timesteps_sofar += np.sum(map(len, traj))
                     elif self.mode == 'concurrent':
                         assert isinstance(traj, list)
-                        timesteps_sofar += np.sum(map(len, traj[0]))
+                        timesteps_sofar += len(traj[0])
                     else:
                         raise NotImplementedError()
                     if timesteps_sofar >= self.n_timesteps:
