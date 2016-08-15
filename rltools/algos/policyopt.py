@@ -54,7 +54,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 
             # Compute baseline
             with util.Timer() as t_base:
-                trajbatch_vals, base_info_fields = self.sampler.process(sess, itr, trajbatch)
+                trajbatch_vals, base_info_fields = self.sampler.process(
+                    sess, itr, trajbatch, self.discount, self.gae_lambda, self.baseline)
 
             # Take the policy grad step
             with util.Timer() as t_step:
@@ -161,8 +162,11 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
             # Baseline
             with util.Timer() as t_base:
                 trajbatch_vals_list, base_info_fields_list = [], []
-                for trajbatch in trajbatchlist:
-                    trajbatch_vals, base_info_fields = self.sampler.process(sess, itr, trajbatch)
+                for agid, trajbatch in enumerate(trajbatchlist):
+                    trajbatch_vals, base_info_fields = self.sampler.process(sess, itr, trajbatch,
+                                                                            self.discount,
+                                                                            self.gae_lambda,
+                                                                            self.baselines[agid])
                     trajbatch_vals_list.append(trajbatch_vals)
                     base_info_fields_list += base_info_fields
 
