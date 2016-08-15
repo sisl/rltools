@@ -152,7 +152,7 @@ class ParallelSampler(Sampler):
                 for tid, tr in enumerate(traj):
                     trajs[tid].append(tr)
 
-                timesteps_sofar += np.sum(map(len, traj[0]))
+                timesteps_sofar += len(traj[0])
             self.seed_idx += 1
             if self.discard_extra and timesteps_sofar >= self.n_timesteps:
                 break
