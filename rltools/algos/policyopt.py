@@ -144,7 +144,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                 assert self.target_policy is not None
                 params_P_ag = [policy.get_params(sess) for policy in self.policies]
                 weightparams_P = np.sum([w * p for w, p in util.safezip(self.weights, params_P_ag)])
-                blendparams_P = self.interp_alpha * self.target.get_params(sess) + (
+                blendparams_P = self.interp_alpha * self.target_policy.get_params(sess) + (
                     1 - self.interp_alpha) * weightparams_P
                 self.target_policy.set_params(sess, blendparams_P)
 
