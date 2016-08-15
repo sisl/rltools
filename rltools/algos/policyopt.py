@@ -54,8 +54,10 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 
             # Compute baseline
             with util.Timer() as t_base:
-                trajbatch_vals, base_info_fields = self.sampler.process(
-                    sess, itr, trajbatch, self.discount, self.gae_lambda, self.baseline)
+                trajbatch_vals, base_info_fields = self.sampler.process(sess, itr, trajbatch,
+                                                                        self.discount,
+                                                                        self.gae_lambda,
+                                                                        self.baseline)
 
             # Take the policy grad step
             with util.Timer() as t_step:
@@ -192,7 +194,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                 ('vf_r2_{}'.format(agid), trajbatch_vals_list[agid]['v_r'], float),
                 ('tdv_r2_{}'.format(agid), trajbatch_vals_list[agid]['tv_r'], float),
                 ('ent_{}'.format(agid), self.policies[agid]._compute_actiondist_entropy(
-                    trajbatchlist[agid].stacked).mean(), float),
+                    trajbatchlist[agid].adist.stacked).mean(), float),
                 ('dx_{}'.format(agid),
                  util.maxnorm(params0_P_list[agid] - self.policies[agid].get_params(sess)), float)
             ]
