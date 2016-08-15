@@ -106,7 +106,7 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
             else:
                 o2, r, done, _ = env.step(actions[-1][0, :ndim])  # XXX
         else:
-            o2, r, done, _ = env.step(actions[-1])
+            o2, r, done, _ = env.step(actions[-1][0])
 
         rewards.append(r)
         if done:

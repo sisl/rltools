@@ -31,6 +31,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             sampler_cls = SimpleSampler
         self.sampler = sampler_cls(self, **sampler_args)
         self.total_time = 0.0
+        self.total_episodes = 0
 
     def train(self, sess, log, save_freq):
         for itr in range(self.start_iter, self.n_iter):
@@ -64,10 +65,12 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 self.sampler.rewnorm.update(sess, trajbatch.r.stacked[:, None])
         # LOG
         self.total_time += t_all.dt
+        self.total_episodes += sample_info_fields[1][1]
 
         fields = [
             ('iter', itr, int)
         ] + sample_info_fields + [
+            ('n_episodes', self.total_episodes, int),
             ('vf_r2', trajbatch_vals['v_r'], float),
             ('tdv_r2', trajbatch_vals['tv_r'], float),
             ('ent', self.policy._compute_actiondist_entropy(trajbatch.adist.stacked).mean(), float
