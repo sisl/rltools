@@ -84,7 +84,10 @@ class ParallelSampler(Sampler):
             if itr % self.timestep_rate == 0:
                 self.n_timesteps *= 2
 
-        state_str = _dumps(self.algo.policy.get_state(sess))
+        if self.mode == 'concurrent':
+            state_str = [_dumps(policy.get_state(sess)) for policy in self.algo.policies]
+        else:
+            state_str = _dumps(self.algo.policy.get_state(sess))
         get_values([proxies.client("set_state", state_str, async=True) for proxies in self.proxies])
 
         self.seed_idx2 = self.seed_idx
@@ -250,7 +253,11 @@ class RolloutServer(object):
         return _dumps(traj)
 
     def set_state(self, state_str):
-        self.policy.set_state(self.sess, _loads(state_str))
+        if self.mode == 'concurrent':
+            [policy.set_state(self.sess, _loads(state_str[agid])) for policy in enumerate(
+                self.policy)]
+        else:
+            self.policy.set_state(self.sess, _loads(state_str))
 
 
 def _start_server():
@@ -264,8 +271,12 @@ def _start_server():
     with tf.Session(config=tfconfig) as sess:
         env, policy, max_traj_len, mode = _loads(s)
         sess.run(tf.initialize_all_variables())
+        if isinstance(policy, list):
+            action_space = policy[0].action_space
+        else:
+            action_space = policy.action_space
         server = zerorpc.Server(
-            RolloutServer(sess, env, policy, max_traj_len, policy.action_space, mode), heartbeat=60)
+            RolloutServer(sess, env, policy, max_traj_len, action_space, mode), heartbeat=60)
         server.bind(addr)
         server.run()
 
