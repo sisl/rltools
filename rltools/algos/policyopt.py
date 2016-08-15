@@ -152,6 +152,8 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     blendparams_P = self.interp_alpha * self.target_policy.get_params(sess) + (
                         1 - self.interp_alpha) * weightparams_P
                 self.target_policy.set_params(sess, blendparams_P)
+                for policies in self.policies:
+                    policies.set_params(sess, blendparams_P)
 
     def step(self, sess, itr):
         with util.Timer() as t_all:
@@ -190,7 +192,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     policy.update_obsnorm(sess, trajbatchlist[agid].obsfeat.stacked)
                     self.sampler.rewnorm.update(sess, trajbatchlist[agid].r.stacked[:, None])
 
-                # LOG
+        # LOG
         self.total_time += t_all.dt
 
         infos = []
