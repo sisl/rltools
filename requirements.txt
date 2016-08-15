@@ -3,3 +3,4 @@ tableprint
 numpy
 matplotlib
 pytest
+zerorpc
