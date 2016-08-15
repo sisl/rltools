@@ -138,6 +138,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     log.write_snapshot(sess, policy, itr)
 
             if itr % blend_freq == 0 or itr % self.n_iter:
+                assert self.target_policy is not None
                 params_P_ag = [policy.get_params(sess) for policy in self.policies]
                 weightparams_P = np.sum([w * p for w, p in util.safezip(self.weights, params_P_ag)])
                 blendparams_P = self.interp_alpha * self.target.get_params(sess) + (
