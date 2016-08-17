@@ -13,7 +13,7 @@ import zerorpc
 from gevent import Timeout
 from zerorpc.gevent_zmq import logger as gevent_log
 
-from rltools.samplers import Sampler, decrollout, rollout
+from rltools.samplers import Sampler, decrollout, centrollout
 from rltools.trajutil import TrajBatch, Trajectory
 from six.moves import cPickle
 
@@ -35,7 +35,7 @@ class ThreadedSampler(Sampler):
             if itr % self.timestep_rate == 0:
                 self.n_timesteps *= 2
 
-        r_func = lambda mtl: rollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(sess, ofeat), mtl, self.algo.policy.action_space)
+        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(sess, ofeat), mtl, self.algo.policy.action_space)
 
         with ThreadPoolExecutor(self.n_workers) as self.executor:
             trajs = self.executor.map(r_func, [self.max_traj_len] * int(self.n_timesteps /
@@ -68,10 +68,14 @@ class ParallelSampler(Sampler):
         self.n_workers = n_workers
         self.mode = mode
         self.discard_extra = discard_extra
-        self.proxies = [
-            RolloutProxy(self.algo.env, self.algo.policy, max_traj_len, self.mode, i)
-            for i in range(self.n_workers)
-        ]
+        if self.mode == 'concurrent':
+            self.proxies = [RolloutProxy(self.algo.env, self.algo.policies, max_traj_len, self.mode,
+                                         i) for i in range(self.n_workers)]
+        else:
+            self.proxies = [
+                RolloutProxy(self.algo.env, self.algo.policy, max_traj_len, self.mode, i)
+                for i in range(self.n_workers)
+            ]
         self.seed_idx = 0
         self.seed_idx2 = 0
 
@@ -80,7 +84,10 @@ class ParallelSampler(Sampler):
             if itr % self.timestep_rate == 0:
                 self.n_timesteps *= 2
 
-        state_str = _dumps(self.algo.policy.get_state(sess))
+        if self.mode == 'concurrent':
+            state_str = [_dumps(policy.get_state(sess)) for policy in self.algo.policies]
+        else:
+            state_str = _dumps(self.algo.policy.get_state(sess))
         get_values([proxies.client("set_state", state_str, async=True) for proxies in self.proxies])
 
         self.seed_idx2 = self.seed_idx
@@ -113,6 +120,9 @@ class ParallelSampler(Sampler):
                     elif self.mode == 'decentralized':
                         assert isinstance(traj, list)
                         timesteps_sofar += np.sum(map(len, traj))
+                    elif self.mode == 'concurrent':
+                        assert isinstance(traj, list)
+                        timesteps_sofar += len(traj[0])
                     else:
                         raise NotImplementedError()
                     if timesteps_sofar >= self.n_timesteps:
@@ -128,6 +138,8 @@ class ParallelSampler(Sampler):
             seed2traj[seed_idx] = _loads(future.get())
 
         trajs = []
+        if self.mode == 'concurrent':
+            trajs = [[] for _ in self.algo.env.agents]
         for (seed, traj) in seed2traj.items():
             if self.mode == 'centralized':
                 trajs.append(traj)
@@ -135,24 +147,52 @@ class ParallelSampler(Sampler):
             elif self.mode == 'decentralized':
                 trajs.extend(traj)
                 timesteps_sofar += np.sum(map(len, traj))
+            elif self.mode == 'concurrent':
+                assert isinstance(traj, list)
+                for tid, tr in enumerate(traj):
+                    trajs[tid].append(tr)
 
+                timesteps_sofar += len(traj[0])
             self.seed_idx += 1
             if self.discard_extra and timesteps_sofar >= self.n_timesteps:
                 break
 
-        trajbatch = TrajBatch.FromTrajs(trajs)
-        self.n_episodes += len(trajbatch)
-        return (trajbatch,
+        if self.mode == 'concurrent':
+            trajbatches = [TrajBatch.FromTrajs(ts) for ts in trajs]
+            self.n_episodes += len(trajbatch[0])
+            return (
+                trajbatches,
+                [('ret', np.sum(
+                    [trajbatch.r.padded(fill=0.).sum(axis=1).mean() for trajbatch in trajbatches]),
+                  float),
+                 ('batch', np.sum([len(trajbatch) for trajbatch in trajbatches]), float),
+                 ('n_episodes', self.n_episodes, int),  # total number of episodes                 
+                 ('avglen',
+                  int(np.mean([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
+                  int),
+                 ('maxlen',
+                  int(np.max([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
+                  int),  # max traj length
+                 ('minlen',
+                  int(np.min([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
+                  int),  # min traj length
+                 ('ravg', np.mean([trajbatch.r.stacked.mean() for trajbatch in trajbatches]), float)
+                ])
+        else:
+            trajbatch = TrajBatch.FromTrajs(trajs)
+            self.n_episodes += len(trajbatch)
+            return (
+                trajbatch,
                 [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
                   float),  # average return for batch of traj
                  ('batch', len(trajbatch), int),  # batch size
-                 ('n_episodes', self.n_episodes, int), # total number of episodes
+                 ('n_episodes', self.n_episodes, int),  # total number of episodes
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
                  ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
                  ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
                  ('ravg', trajbatch.r.stacked.mean(),
-                  int)  # avg reward encountered per time step (probably not that useful)
+                  float)  # avg reward encountered per time step (probably not that useful)
                 ])
 
 
@@ -195,23 +235,35 @@ class RolloutServer(object):
         self.action_space = action_space
         self.mode = mode
         if self.mode == 'centralized':
-            self.rollout_fn = rollout
+            self.rollout_fn = centrollout
         elif self.mode == 'decentralized':
+            self.rollout_fn = decrollout
+        elif self.mode == 'concurrent':
             self.rollout_fn = decrollout
 
     def sample(self, seed):
-        #self.env.seed(seed)
+        self.env.seed(seed)
         np.random.seed(seed)
         tf.set_random_seed(seed)
         random.seed(seed)
-        traj = self.rollout_fn(self.env, self.obsfeat_fn,
-                               lambda ofeat: self.policy.sample_actions(self.sess, ofeat),
-                               self.max_traj_len, self.action_space)
+        if self.mode == 'concurrent':
+            traj = self.rollout_fn(
+                self.env, self.obsfeat_fn,
+                [lambda ofeat: policy.sample_actions(self.sess, ofeat) for policy in self.policy],
+                self.max_traj_len, self.action_space)
+        else:
+            traj = self.rollout_fn(self.env, self.obsfeat_fn,
+                                   lambda ofeat: self.policy.sample_actions(self.sess, ofeat),
+                                   self.max_traj_len, self.action_space)
 
         return _dumps(traj)
 
     def set_state(self, state_str):
-        self.policy.set_state(self.sess, _loads(state_str))
+        if self.mode == 'concurrent':
+            [policy.set_state(self.sess, _loads(state_str[agid]))
+             for agid, policy in enumerate(self.policy)]
+        else:
+            self.policy.set_state(self.sess, _loads(state_str))
 
 
 def _start_server():
@@ -225,8 +277,12 @@ def _start_server():
     with tf.Session(config=tfconfig) as sess:
         env, policy, max_traj_len, mode = _loads(s)
         sess.run(tf.initialize_all_variables())
+        if isinstance(policy, list):
+            action_space = policy[0].action_space
+        else:
+            action_space = policy.action_space
         server = zerorpc.Server(
-            RolloutServer(sess, env, policy, max_traj_len, policy.action_space, mode), heartbeat=60)
+            RolloutServer(sess, env, policy, max_traj_len, action_space, mode), heartbeat=60)
         server.bind(addr)
         server.run()
 

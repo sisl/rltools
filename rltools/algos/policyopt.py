@@ -1,9 +1,10 @@
 from __future__ import absolute_import, print_function
+import numpy as np
 
-from rltools import optim, util
+from rltools import util
 from rltools.algos import RLAlgorithm
-from rltools.policy.stochastic import StochasticPolicy
 from rltools.samplers.serial import SimpleSampler
+from rltools.samplers.parallel import ParallelSampler
 
 
 class SamplingPolicyOptimizer(RLAlgorithm):
@@ -53,7 +54,10 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 
             # Compute baseline
             with util.Timer() as t_base:
-                trajbatch_vals, base_info_fields = self.sampler.process(sess, itr, trajbatch)
+                trajbatch_vals, base_info_fields = self.sampler.process(sess, itr, trajbatch,
+                                                                        self.discount,
+                                                                        self.gae_lambda,
+                                                                        self.baseline)
 
             # Take the policy grad step
             with util.Timer() as t_step:
@@ -105,3 +109,108 @@ def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg
         ]
 
     return trpo_step
+
+
+class ConcurrentPolicyOptimizer(RLAlgorithm):
+
+    def __init__(self, env, policies, baselines, step_func, target_policy, weights, interp_alpha,
+                 discount, gae_lambda, n_iter, start_iter=0, sampler_cls=None, sampler_args=None,
+                 **kwargs):
+        self.env = env
+        self.policies = policies
+        self.baselines = baselines
+        self.step_func = step_func
+        self.target_policy = target_policy
+        self.weights = weights
+        self.interp_alpha = interp_alpha
+        self.discount = discount
+        self.gae_lambda = gae_lambda
+        self.n_iter = n_iter
+        self.start_iter = start_iter
+        if sampler_cls is None:
+            sampler_cls = ParallelSampler
+        self.sampler = sampler_cls(self, **sampler_args)
+        self.total_time = 0.0
+
+    def train(self, sess, log, blend_freq, save_freq):
+        for itr in range(self.start_iter, self.n_iter):
+            iter_info = self.step(sess, itr)
+            log.write(iter_info, print_header=itr % 20 == 0)
+            if itr % save_freq == 0 or itr % self.n_iter:
+                for policy in self.policies:
+                    log.write_snapshot(sess, policy, itr)
+
+            if blend_freq > 0:
+                assert self.target_policy is not None
+                assert np.isclose(sum(self.weights), 1)
+                params_P_ag = [policy.get_params(sess) for policy in self.policies]
+                weightparams_P = np.sum([w * p for w, p in util.safezip(self.weights, params_P_ag)])
+                if itr == 0:
+                    blendparams_P = 0.001 * self.target_policy.get_params(
+                        sess) + 0.999 * weightparams_P
+                if itr > 1 and (itr % blend_freq == 0 or itr % self.n_iter):
+                    blendparams_P = self.interp_alpha * self.target_policy.get_params(sess) + (
+                        1 - self.interp_alpha) * weightparams_P
+                self.target_policy.set_params(sess, blendparams_P)
+                for policies in self.policies:
+                    policies.set_params(sess, blendparams_P)
+
+    def step(self, sess, itr):
+        with util.Timer() as t_all:
+            with util.Timer() as t_sample:
+                if itr == 0:
+                    # extra batch to init std
+                    trajbatchlist0, _ = self.sampler.sample(sess, itr)
+                    for policy, baseline, trajbatch0 in util.safezip(self.policies, self.baselines,
+                                                                     trajbatchlist0):
+                        policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
+                        baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
+                        self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
+                trajbatchlist, sampler_info_fields = self.sampler.sample(sess, itr)
+
+            # Baseline
+            with util.Timer() as t_base:
+                trajbatch_vals_list, base_info_fields_list = [], []
+                for agid, trajbatch in enumerate(trajbatchlist):
+                    trajbatch_vals, base_info_fields = self.sampler.process(sess, itr, trajbatch,
+                                                                            self.discount,
+                                                                            self.gae_lambda,
+                                                                            self.baselines[agid])
+                    trajbatch_vals_list.append(trajbatch_vals)
+                    base_info_fields_list += base_info_fields
+
+            # Take policy steps
+            with util.Timer() as t_step:
+                step_print_fields_list = []
+                params0_P_list = []
+                for agid, policy in enumerate(self.policies):
+                    params0_P = policy.get_params(sess)
+                    params0_P_list.append(params0_P)
+                    step_print_fields = self.step_func(sess, policy, trajbatchlist[agid],
+                                                       trajbatch_vals_list[agid]['advantage'])
+                    step_print_fields_list += step_print_fields
+                    policy.update_obsnorm(sess, trajbatchlist[agid].obsfeat.stacked)
+                    self.sampler.rewnorm.update(sess, trajbatchlist[agid].r.stacked[:, None])
+
+        # LOG
+        self.total_time += t_all.dt
+
+        infos = []
+        for agid in range(len(self.policies)):
+            infos += [
+                ('vf_r2_{}'.format(agid), trajbatch_vals_list[agid]['v_r'], float),
+                ('tdv_r2_{}'.format(agid), trajbatch_vals_list[agid]['tv_r'], float),
+                ('ent_{}'.format(agid), self.policies[agid]._compute_actiondist_entropy(
+                    trajbatchlist[agid].adist.stacked).mean(), float),
+                ('dx_{}'.format(agid),
+                 util.maxnorm(params0_P_list[agid] - self.policies[agid].get_params(sess)), float)
+            ]
+        fields = [
+            ('iter', itr, int)
+        ] + sampler_info_fields + infos + base_info_fields_list + step_print_fields_list + [
+            ('tsamp', t_sample.dt, float),  # Time for sampling
+            ('tbase', t_base.dt, float),  # Time for advantage/baseline computation
+            ('tstep', t_step.dt, float),
+            ('ttotal', self.total_time, float)
+        ]
+        return fields

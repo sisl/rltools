@@ -32,14 +32,14 @@ class Sampler(object):
         """Collect samples"""
         raise NotImplementedError()
 
-    def process(self, sess, itr, trajbatch):
+    def process(self, sess, itr, trajbatch, discount, gae_lambda, baseline):
         B = len(trajbatch)
         trajlens = [len(traj) for traj in trajbatch]
         maxT = max(trajlens)
 
         rewards_B_T = self.rewnorm.standardize(sess, trajbatch.r.padded(fill=0.), centered=False)
         assert not self.algo.discount is None
-        qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, self.algo.discount)
+        qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, discount)
         assert qvals_zfilled_B_T.shape == (B, maxT)
         q = RaggedArray([qvals_zfilled_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
         q_B_T = q.padded(fill=np.nan)  # q vals padded with nans in the end
@@ -51,7 +51,7 @@ class Sampler(object):
         simplev = RaggedArray([simplev_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
 
         # State-dependent baseline
-        v_stacked = self.algo.baseline.predict(sess, trajbatch)
+        v_stacked = baseline.predict(sess, trajbatch)
         assert v_stacked.ndim == 1
         v = RaggedArray(v_stacked, lengths=trajlens)
 
@@ -75,14 +75,14 @@ class Sampler(object):
         v_B_T = v.padded(fill=0.)
         v_B_Tp1 = np.concatenate([v_B_T, np.zeros((B, 1))], axis=1)
         #assert v_B_Tp1.shape == (B, maxT + 1)
-        delta_B_T = rewards_B_T + self.algo.discount * v_B_Tp1[:, 1:] - v_B_Tp1[:, :-1]
-        adv_B_T = rltools.util.discount(delta_B_T, self.algo.discount * self.algo.gae_lambda)
+        delta_B_T = rewards_B_T + discount * v_B_Tp1[:, 1:] - v_B_Tp1[:, :-1]
+        adv_B_T = rltools.util.discount(delta_B_T, discount * gae_lambda)
         #assert adv_B_T.shape == (B, maxT)
         adv = RaggedArray([adv_B_T[i, :l] for i, l in enumerate(trajlens)])
         assert np.allclose(adv.padded(fill=0), adv_B_T)
 
         # Fit for the next time step
-        baseline_info = self.algo.baseline.fit(sess, trajbatch, q.stacked)
+        baseline_info = baseline.fit(sess, trajbatch, q.stacked)
 
         return dict(advantage=adv, qval=q, v_r=vfunc_r2, tv_r=simplev_r2), baseline_info
 
@@ -90,9 +90,10 @@ class Sampler(object):
         raise NotImplementedError()
 
 
-def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+def centrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+    assert env.reward_mech == 'global'
     obs, obsfeat, actions, actiondists, rewards = [], [], [], [], []
-    obs.append((env.reset())[None, ...].copy())
+    obs.append(np.c_[env.reset()].ravel()[None, ...].copy())
 
     for itr in range(max_traj_len):
         obsfeat.append(obsfeat_fn(obs[-1]))
@@ -109,11 +110,12 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
         else:
             o2, r, done, _ = env.step(actions[-1][0])
 
-        rewards.append(r)
+        assert (r == r[0]).all()
+        rewards.append(r[0])
         if done:
             break
         if itr != max_traj_len - 1:
-            obs.append(o2[None, ...])
+            obs.append(np.c_[o2].ravel()[None, ...])
 
     obs_T_Do = np.concatenate(obs)
     assert obs_T_Do.shape[0] == len(obs), '{} != {}'.format(obs_T_Do.shape, len(obs))
@@ -129,17 +131,21 @@ def rollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
     return Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T)
 
 
+def get_lists(nl, na):
+    l = []
+    for i in range(nl):
+        l.append([[] for j in range(na)])
+    return l
+
+
 def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+    if not isinstance(act_fn, list):
+        act_fn = [act_fn for _ in env.agents]
 
-    def get_lists(nl, na):
-        l = []
-        for i in range(nl):
-            l.append([[] for j in range(na)])
-        return l
-
+    assert len(act_fn) == len(env.agents)
     trajs = []
     old_obs = env.reset()
-    obs, obsfeat, actions, actiondists, rewards = get_lists(5, env.total_agents)
+    obs, obsfeat, actions, actiondists, rewards = get_lists(5, len(env.agents))
 
     for itr in range(max_traj_len):
         agent_actions = []
@@ -148,7 +154,7 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
                 continue
             obs[i].append(np.expand_dims(agent_obs, 0))
             obsfeat[i].append(obsfeat_fn(obs[i][-1]))
-            a, adist = act_fn(obsfeat[i][-1])
+            a, adist = act_fn[i](obsfeat[i][-1])
             agent_actions.append(a)
             actions[i].append(a)
             actiondists[i].append(adist)
@@ -162,13 +168,13 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
         for i, o in enumerate(old_obs):
             if o is None:
                 continue
-            rewards[i].append(r)
+            rewards[i].append(r[i])
         old_obs = new_obs
 
         if done:
             break
 
-    for agnt in range(env.total_agents):
+    for agnt in range(len(env.agents)):
         obs_T_Do = np.concatenate(obs[agnt])
         obsfeat_T_Df = np.concatenate(obsfeat[agnt])
         adist_T_Pa = np.concatenate(actiondists[agnt])

@@ -3,7 +3,7 @@ import random
 
 import numpy as np
 
-from rltools.samplers import Sampler, rollout, decrollout
+from rltools.samplers import Sampler, centrollout, decrollout
 from rltools.trajutil import TrajBatch, Trajectory
 
 
@@ -23,9 +23,9 @@ class SimpleSampler(Sampler):
         trajs = []
         timesteps_sofar = 0
         while True:
-            traj = rollout(self.algo.env, self.algo.obsfeat_fn,
-                           lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
-                           self.max_traj_len, self.algo.policy.action_space)
+            traj = centrollout(self.algo.env, self.algo.obsfeat_fn,
+                               lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                               self.max_traj_len, self.algo.policy.action_space)
             trajs.append(traj)
             timesteps_sofar += len(traj)
             if timesteps_sofar >= self.n_timesteps:
