@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import tensorflow as tf
 
-from rltools import util
+from rltools import util, tfutil
 
 
 class Model(object):
