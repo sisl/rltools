@@ -110,19 +110,49 @@ class ReshapeLayer(Layer):
         return self._output_shape
 
 
+class FlattenLayer(Layer):
+    """
+    outdim: number of output dimensions - (B, N) by default so 2. For images set 3
+    """
+
+    def __init__(self, input_, outdim=2):
+        assert outdim >= 1
+        self._outdim = outdim
+        input_shape = tuple(input_.get_shape().as_list())
+        to_flatten = input_shape[self._outdim - 1:]
+        if any(s is None for s in to_flatten):
+            flattened = None
+        else:
+            flattened = int(np.prod(to_flatten))
+
+        self._output_shape = input_shape[1:self._outdim - 1] + (flattened,)
+        util.header('Flatten(new_shape=%s)' % str(self._output_shape))
+        pre_shape = tf.shape(input_)[:self._outdim - 1:]
+        to_flatten = tf.reduce_prod(tf.shape(input_)[self._outdim - 1:])
+        self._output = tf.reshape(input_, tf.concat(0, [pre_shape, tf.pack([to_flatten])]))
+
+    @property
+    def output(self):
+        return self._output
+
+    @property
+    def output_shape(self):
+        return self._output_shape
+
 class AffineLayer(Layer):
 
-    def __init__(self, input_B_Di, input_shape, output_shape, initializer):
+    def __init__(self, input_B_Di, input_shape, output_shape, Winitializer, binitializer):
         assert len(input_shape) == len(output_shape) == 1
         util.header('Affine(in=%d, out=%d)' % (input_shape[0], output_shape[0]))
         self._output_shape = (output_shape[0],)
         with tf.variable_scope(type(self).__name__) as self.varscope:
-            if initializer is None:
-                initializer = tf.contrib.layers.xavier_initializer()
+            if Winitializer is None:
+                Winitializer = tf.contrib.layers.xavier_initializer()
+            if binitializer is None:
+                binitializer = tf.zeros_initializer
             self.W_Di_Do = tf.get_variable('W', shape=[input_shape[0], output_shape[0]],
-                                           initializer=initializer)
-            self.b_1_Do = tf.get_variable('b', shape=[1, output_shape[0]],
-                                          initializer=tf.constant_initializer(0.))
+                                           initializer=Winitializer)
+            self.b_1_Do = tf.get_variable('b', shape=[1, output_shape[0]], initializer=binitializer)
             self.output_B_Do = tf.matmul(input_B_Di, self.W_Di_Do) + self.b_1_Do
 
     @property
@@ -229,24 +259,25 @@ class FeedforwardNet(Layer):
 
                     elif ls['type'] == 'fc':
                         _check_keys(ls, ['type', 'n'], ['initializer'])
-                        self.layers.append(AffineLayer(prev_output, prev_output_shape,
-                                                       output_shape=(ls['n'],),
-                                                       initializer=_parse_initializer(ls)))
+                        self.layers.append(
+                            AffineLayer(prev_output, prev_output_shape, output_shape=(ls['n'],),
+                                        Winitializer=_parse_initializer(ls), binitializer=None))
 
                     elif ls['type'] == 'conv':
                         _check_keys(ls,
                                     ['type', 'chanout', 'filtsize', 'outsize', 'stride', 'padding'],
                                     ['initializer'])
-                        self.layers.append(ConvLayer(
-                            input_B_Ih_Iw_Ci=prev_output, input_shape=prev_output_shape, Co=ls[
-                                'chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'], Oh=ls['outsize'],
-                            Ow=ls['outsize'], Sh=ls['stride'], Sw=ls['stride'], padding=ls[
-                                'padding'], initializer=_parse_initializer(ls)))
+                        self.layers.append(
+                            ConvLayer(input_B_Ih_Iw_Ci=prev_output, input_shape=prev_output_shape,
+                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'], Oh=ls[
+                                          'outsize'], Ow=ls['outsize'], Sh=ls['stride'], Sw=ls[
+                                              'stride'], padding=ls['padding'],
+                                      initializer=_parse_initializer(ls)))
 
                     elif ls['type'] == 'nonlin':
                         _check_keys(ls, ['type', 'func'], [])
-                        self.layers.append(NonlinearityLayer(prev_output, prev_output_shape, ls[
-                            'func']))
+                        self.layers.append(
+                            NonlinearityLayer(prev_output, prev_output_shape, ls['func']))
 
                     else:
                         raise NotImplementedError('Unknown layer type %s' % ls['type'])
