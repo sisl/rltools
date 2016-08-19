@@ -14,7 +14,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                  store_paths=False, whole_paths=True, sampler_cls=None,
                  sampler_args=dict(max_traj_len=200, n_timesteps=6400, adaptive=False,
                                    n_timesteps_min=1600, n_timesteps_max=12800, timestep_rate=40,
-                                   enable_rewnorm=True), **kwargs):
+                                   enable_rewnorm=True), 
+                 update_curriculum=False, **kwargs):
         self.env = env
         self.policy = policy
         self.baseline = baseline
@@ -31,6 +32,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         if sampler_cls is None:
             sampler_cls = SimpleSampler
         self.sampler = sampler_cls(self, **sampler_args)
+        self.update_curriculum = update_curriculum
         self.total_time = 0.0
 
     def train(self, sess, log, save_freq):
@@ -39,6 +41,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             log.write(iter_info, print_header=itr % 20 == 0)
             if itr % save_freq == 0 or itr % self.n_iter:
                 log.write_snapshot(sess, self.policy, itr)
+            if self.update_curriculum: self.env.update_curriculum(itr)
 
     def step(self, sess, itr):
         with util.Timer() as t_all:
