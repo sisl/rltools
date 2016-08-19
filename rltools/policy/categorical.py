@@ -32,7 +32,7 @@ class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
         with tf.variable_scope('out'):
             out_layer = nn.AffineLayer(net.output, net.output_shape, (self.action_space.n,),
                                        Winitializer=tf.zeros_initializer,
-                                       binitialize=None)  # TODO action_space
+                                       binitializer=None)  # TODO action_space
 
         scores_B_Pa = out_layer.output
         actiondist_B_Pa = scores_B_Pa - tfutil.logsumexp(scores_B_Pa, axis=1)
