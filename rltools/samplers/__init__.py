@@ -84,7 +84,10 @@ class Sampler(object):
         # Fit for the next time step
         baseline_info = baseline.fit(sess, trajbatch, q.stacked)
 
-        return dict(advantage=adv, qval=q, v_r=vfunc_r2, tv_r=simplev_r2), baseline_info
+        # TODO: Don't understand the valid thing yet
+        valid = RaggedArray([np.ones(trajlen) for trajlen in trajlens])
+        return dict(advantage=adv, qval=q, v_r=vfunc_r2, tv_r=simplev_r2,
+                    valid=valid.padded(fill=0.)), baseline_info
 
     def stop(self):
         raise NotImplementedError()
