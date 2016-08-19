@@ -37,7 +37,7 @@ class Sampler(object):
         trajlens = [len(traj) for traj in trajbatch]
         maxT = max(trajlens)
 
-        rewards_B_T = self.rewnorm.standardize(sess, trajbatch.r.padded(fill=0.), centered=False)
+        rewards_B_T = self.rewnorm.standardize(trajbatch.r.padded(fill=0.), centered=False)
         assert not self.algo.discount is None
         qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, discount)
         assert qvals_zfilled_B_T.shape == (B, maxT)
@@ -51,7 +51,7 @@ class Sampler(object):
         simplev = RaggedArray([simplev_B_T[i, :len(traj)] for i, traj in enumerate(trajbatch)])
 
         # State-dependent baseline
-        v_stacked = baseline.predict(sess, trajbatch)
+        v_stacked = baseline.predict(trajbatch)
         assert v_stacked.ndim == 1
         v = RaggedArray(v_stacked, lengths=trajlens)
 
@@ -82,9 +82,12 @@ class Sampler(object):
         assert np.allclose(adv.padded(fill=0), adv_B_T)
 
         # Fit for the next time step
-        baseline_info = baseline.fit(sess, trajbatch, q.stacked)
+        baseline_info = baseline.fit(trajbatch, q.stacked)
 
-        return dict(advantage=adv, qval=q, v_r=vfunc_r2, tv_r=simplev_r2), baseline_info
+        # TODO: Don't understand the valid thing yet
+        valid = RaggedArray([np.ones(trajlen) for trajlen in trajlens])
+        return dict(advantage=adv, qval=q, v_r=vfunc_r2, tv_r=simplev_r2,
+                    valid=valid.padded(fill=0.)), baseline_info
 
     def stop(self):
         raise NotImplementedError()

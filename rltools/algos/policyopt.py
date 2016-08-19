@@ -50,9 +50,9 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 if itr == 0:
                     # extra batch to init std
                     trajbatch0, _ = self.sampler.sample(sess, itr)
-                    self.policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                    self.baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                    self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
+                    self.policy.update_obsnorm(trajbatch0.obsfeat.stacked)
+                    self.baseline.update_obsnorm(trajbatch0.obsfeat.stacked)
+                    self.sampler.rewnorm.update(trajbatch0.r.stacked[:, None])
                 trajbatch, sample_info_fields = self.sampler.sample(sess, itr)
 
             # Compute baseline
@@ -64,11 +64,13 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 
             # Take the policy grad step
             with util.Timer() as t_step:
-                params0_P = self.policy.get_params(sess)
-                step_print_fields = self.step_func(sess, self.policy, trajbatch,
-                                                   trajbatch_vals['advantage'])
-                self.policy.update_obsnorm(sess, trajbatch.obsfeat.stacked)
-                self.sampler.rewnorm.update(sess, trajbatch.r.stacked[:, None])
+                params0_P = self.policy.get_params()
+                step_print_fields = self.step_func(self.policy, trajbatch,
+                                                   trajbatch_vals['advantage'],
+                                                   trajbatch_vals['valids'] if self.policy.recurrent
+                                                   else None)
+                self.policy.update_obsnorm(trajbatch.obsfeat.stacked)
+                self.sampler.rewnorm.update(trajbatch.r.stacked[:, None])
         # LOG
         self.total_time += t_all.dt
 
@@ -79,7 +81,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             ('tdv_r2', trajbatch_vals['tv_r'], float),
             ('ent', self.policy._compute_actiondist_entropy(trajbatch.adist.stacked).mean(), float
             ),  # entropy of action distribution
-            ('dx', util.maxnorm(params0_P - self.policy.get_params(sess)), float
+            ('dx', util.maxnorm(params0_P - self.policy.get_params()), float
             )  # max parameter different from last iteration
         ] + base_info_fields + step_print_fields + [
             ('tsamp', t_sample.dt, float),  # Time for sampling
@@ -93,15 +95,19 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg_iter=10,
          enable_bt=True):
 
-    def trpo_step(sess, policy, trajbatch, advantages):
+    def trpo_step(policy, trajbatch, advantages, valid=None):
         # standardize advantage
         advstacked_N = util.standardized(advantages.stacked)
 
+        if valid is None:
+            valid = tuple()
+        else:
+            valid = (valid,)
         # Compute objective, KL divergence and gradietns at init point
         feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked,
-                advstacked_N)
+                advstacked_N) + valid
 
-        step_info = policy._ngstep(sess, feed, max_kl=max_kl, damping=damping,
+        step_info = policy._ngstep(feed, max_kl=max_kl, damping=damping,
                                    subsample_hvp_frac=subsample_hvp_frac,
                                    grad_stop_tol=grad_stop_tol)
         return [

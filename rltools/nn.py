@@ -346,30 +346,22 @@ class Standardizer(Model):
                                                trainable=False)
             self._stdev_1_D = tf.sqrt(self._meansq_1_D - tf.square(self._mean_1_D) + self._eps)
 
-    def get_mean(self, sess):
-        return sess.run(self._mean_1_D)
+        self.get_mean = tfutil.function([], self._mean_1_D)
+        self.get_meansq = tfutil.function([], self._meansq_1_D)
+        self.get_stdev = tfutil.function([], self._stdev_1_D)
+        self.get_count = tfutil.function([], self._count)
 
-    def get_meansq(self, sess):
-        return sess.run(self._meansq_1_D)
-
-    def get_stdev(self, sess):
-        # TODO: return with shape (1,D)
-        return sess.run(self._stdev_1_D)
-
-    def get_count(self, sess):
-        return sess.run(self._count)
-
-    def update(self, sess, points_N_D):
+    def update(self, points_N_D):
         assert points_N_D.ndim >= 2 and points_N_D.shape[1:] == self._shape
         num = points_N_D.shape[0]
-        count = self.get_count(sess)
+        count = self.get_count()
         a = count / (count + num)
-        mean_op = self._mean_1_D.assign(a * self.get_mean(sess) + (1. - a) * points_N_D.mean(
+        mean_op = self._mean_1_D.assign(a * self.get_mean() + (1. - a) * points_N_D.mean(
             axis=0, keepdims=True))
-        meansq_op = self._meansq_1_D.assign(a * self.get_meansq(sess) + (1. - a) * (
-            points_N_D**2).mean(axis=0, keepdims=True))
+        meansq_op = self._meansq_1_D.assign(a * self.get_meansq() + (1. - a) * (points_N_D**2).mean(
+            axis=0, keepdims=True))
         count_op = self._count.assign(count + num)
-        sess.run([mean_op, meansq_op, count_op])
+        tf.get_default_session().run([mean_op, meansq_op, count_op])
 
     def standardize_expr(self, x_B_D):
         return (x_B_D - self._mean_1_D) / (self._stdev_1_D + self._eps)
@@ -377,16 +369,16 @@ class Standardizer(Model):
     def unstandardize_expr(self, y_B_D):
         return y_B_D * (self._stdev_1_D + self._eps) + self._mean_1_D
 
-    def standardize(self, sess, x_B_D, centered=True):
+    def standardize(self, x_B_D, centered=True):
         assert x_B_D.ndim >= 2
         mu = 0.
         if centered:
-            mu = self.get_mean(sess)
-        return (x_B_D - mu) / (self.get_stdev(sess) + self._eps)
+            mu = self.get_mean()
+        return (x_B_D - mu) / (self.get_stdev() + self._eps)
 
-    def unstandardize(self, sess, y_B_D, centered=True):
+    def unstandardize(self, y_B_D, centered=True):
         assert y_B_D.ndim >= 2
         mu = 0.
         if centered:
-            mu = self.get_mean(sess)
-        return y_B_D * (self.get_stdev(sess) + self._eps) + mu
+            mu = self.get_mean()
+        return y_B_D * (self.get_stdev() + self._eps) + mu

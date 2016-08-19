@@ -24,7 +24,7 @@ class SimpleSampler(Sampler):
         timesteps_sofar = 0
         while True:
             traj = centrollout(self.algo.env, self.algo.obsfeat_fn,
-                               lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                               lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                self.max_traj_len, self.algo.policy.action_space)
             trajs.append(traj)
             timesteps_sofar += len(traj)
@@ -37,7 +37,7 @@ class SimpleSampler(Sampler):
                 [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
                   float),  # average return for batch of traj
                  ('batch', len(trajbatch), int),  # batch size                 
-                 ('n_episodes', self.n_episodes, int), # total number of episodes
+                 ('n_episodes', self.n_episodes, int),  # total number of episodes
                  ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
                   int),  # average traj length
                  ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
@@ -64,7 +64,7 @@ class DecSampler(Sampler):
         timesteps_sofar = 0
         while True:
             ag_trajs = decrollout(self.algo.env, self.algo.obsfeat_fn,
-                                  lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                                  lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                   self.max_traj_len, self.algo.policy.action_space)
             trajs.extend(ag_trajs)
             timesteps_sofar += np.sum(map(len, ag_trajs))
@@ -164,7 +164,7 @@ class ImportanceWeightedSampler(SimpleSampler):
 
             for traj in samples:
                 # What the current policy would have done
-                _, adist_T_Pa = self.algo.policy.sample_actions(sess, traj.obsfeat_T_Df)
+                _, adist_T_Pa = self.algo.policy.sample_actions(traj.obsfeat_T_Df)
                 # What the older policy did
                 hist_adist_T_Pa = traj.adist_T_Pa
 
@@ -234,7 +234,7 @@ class ExperienceReplay(Sampler):
         indices = random.sample(xrange(self.replay_size), self.batch_size)
 
         ofeat = self.algo.obsfeat_fn(np.expand_dims(self.old_ob, 0))
-        a, _ = self.algo.policy.sample_actions(sess, ofeat)
+        a, _ = self.algo.policy.sample_actions(ofeat)
         o, r, done, _ = env.step(a[0, 0])
         self.store(self.old_ob, a, r, o, done)
         if done or itr % self.max_traj_len == 0:

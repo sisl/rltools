@@ -35,7 +35,7 @@ class ThreadedSampler(Sampler):
             if itr % self.timestep_rate == 0:
                 self.n_timesteps *= 2
 
-        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(sess, ofeat), mtl, self.algo.policy.action_space)
+        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(ofeat), mtl, self.algo.policy.action_space)
 
         with ThreadPoolExecutor(self.n_workers) as self.executor:
             trajs = self.executor.map(r_func, [self.max_traj_len] * int(self.n_timesteps /
@@ -85,9 +85,9 @@ class ParallelSampler(Sampler):
                 self.n_timesteps *= 2
 
         if self.mode == 'concurrent':
-            state_str = [_dumps(policy.get_state(sess)) for policy in self.algo.policies]
+            state_str = [_dumps(policy.get_state()) for policy in self.algo.policies]
         else:
-            state_str = _dumps(self.algo.policy.get_state(sess))
+            state_str = _dumps(self.algo.policy.get_state())
         get_values([proxies.client("set_state", state_str, async=True) for proxies in self.proxies])
 
         self.seed_idx2 = self.seed_idx
@@ -159,7 +159,7 @@ class ParallelSampler(Sampler):
 
         if self.mode == 'concurrent':
             trajbatches = [TrajBatch.FromTrajs(ts) for ts in trajs]
-            self.n_episodes += len(trajbatch[0])
+            self.n_episodes += len(trajbatches[0])
             return (
                 trajbatches,
                 [('ret', np.sum(
@@ -249,21 +249,20 @@ class RolloutServer(object):
         if self.mode == 'concurrent':
             traj = self.rollout_fn(
                 self.env, self.obsfeat_fn,
-                [lambda ofeat: policy.sample_actions(self.sess, ofeat) for policy in self.policy],
+                [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
                 self.max_traj_len, self.action_space)
         else:
             traj = self.rollout_fn(self.env, self.obsfeat_fn,
-                                   lambda ofeat: self.policy.sample_actions(self.sess, ofeat),
+                                   lambda ofeat: self.policy.sample_actions(ofeat),
                                    self.max_traj_len, self.action_space)
 
         return _dumps(traj)
 
     def set_state(self, state_str):
         if self.mode == 'concurrent':
-            [policy.set_state(self.sess, _loads(state_str[agid]))
-             for agid, policy in enumerate(self.policy)]
+            [policy.set_state(_loads(state_str[agid])) for agid, policy in enumerate(self.policy)]
         else:
-            self.policy.set_state(self.sess, _loads(state_str))
+            self.policy.set_state(_loads(state_str))
 
 
 def _start_server():
