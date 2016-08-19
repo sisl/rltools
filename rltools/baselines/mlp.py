@@ -90,35 +90,9 @@ class MLPBaseline(Baseline, nn.Model):
             assert out_layer.output_shape == (1,)
         return out_layer.output[:, 0]
 
-    # def compute_obj_kl(self, sess, obsfeat_B_Df, t_B, target_val_B, old_val_B):
-    #     return sess.run([self.obj, self.kl], {self.obsfeat_B_Df: obsfeat_B_Df,
-    #                                           self.t_B_1: t_B[:, None],
-    #                                           self.target_val_B: target_val_B,
-    #                                           self.old_val_B: old_val_B})
-
-    # def compute_obj_kl_with_grad(self, sess, obsfeat_B_Df, t_B, target_val_B, old_val_B):
-    #     return sess.run([self.obj, self.kl, self.objgrad_P], {self.obsfeat_B_Df: obsfeat_B_Df,
-    #                                                           self.t_B_1: t_B[:, None],
-    #                                                           self.target_val_B: target_val_B,
-    #                                                           self.old_val_B: old_val_B})
-
-    # def compute_klgrad(self, sess, obsfeat_B_Df, t_B, target_val_B, old_val_B):
-    #     return sess.run([self.kl_grad_P], {self.obsfeat_B_Df: obsfeat_B_Df,
-    #                                        self.t_B_1: t_B[:, None],
-    #                                        self.target_val_B: target_val_B,
-    #                                        self.old_val_B: old_val_B})[0]
-
-    def update_obsnorm(self, sess, obs_B_Do):
+    def update_obsnorm(self, obs_B_Do):
         """Update norms using moving avg"""
-        self.obsnorm.update(sess, obs_B_Do)
-
-    # def get_params(self):
-    #     params_P = sess.run(self._curr_params_P)
-    #     assert params_P.shape == (self._num_params,)
-    #     return params_P
-
-    # def set_params(self, sess, params_P):
-    #     sess.run(self._assign_params, {self._flatparams_P: params_P})
+        self.obsnorm.update(obs_B_Do)
 
     @contextmanager
     def try_params(self, params_P):
@@ -127,20 +101,17 @@ class MLPBaseline(Baseline, nn.Model):
         yield
         self.set_params(orig_params_P)
 
-    # def _predict_raw(self, sess, obsfeat_B_Df, t_B):
-    #     return sess.run(self.val_B, {self.obsfeat_B_Df: obsfeat_B_Df, self.t_B_1: t_B[:, None]})
-
-    def fit(self, sess, trajs, qval_B):
+    def fit(self, trajs, qval_B):
         obs_B_Do = trajs.obs.stacked
         t_B = trajs.time.stacked
 
         # Update norm
-        self.obsnorm.update(sess, obs_B_Do)
-        self.vnorm.update(sess, qval_B[:, None])
+        self.obsnorm.update(obs_B_Do)
+        self.vnorm.update(qval_B[:, None])
 
         # Take step
-        sobs_B_Do = self.obsnorm.standardize(sess, obs_B_Do)
-        sqval_B = self.vnorm.standardize(sess, qval_B[:, None])[:, 0]
+        sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
+        sqval_B = self.vnorm.standardize(qval_B[:, None])[:, 0]
         feed = (sobs_B_Do, t_B, sqval_B, self._predict_raw(sobs_B_Do, t_B))
         step_info = self._ngstep(feed, max_kl=self.max_kl, damping=self.damping,
                                  subsample_hvp_frac=self.subsample_hvp_frac,
@@ -152,10 +123,10 @@ class MLPBaseline(Baseline, nn.Model):
             ('vf_bt', step_info.bt, int),  # backtracking steps
         ]
 
-    def predict(self, sess, trajs):
+    def predict(self, trajs):
         obs_B_Do = trajs.obs.stacked
         t_B = trajs.time.stacked
-        sobs_B_Do = self.obsnorm.standardize(sess, obs_B_Do)
-        pred_B = self.vnorm.unstandardize(sess, self._predict_raw(sobs_B_Do, t_B)[:, None])[:, 0]
+        sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
+        pred_B = self.vnorm.unstandardize(self._predict_raw(sobs_B_Do, t_B)[:, None])[:, 0]
         assert pred_B.shape == t_B.shape
         return pred_B

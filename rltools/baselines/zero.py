@@ -14,11 +14,11 @@ class ZeroBaseline(Baseline):
     def set_params(self, sess, val):
         pass
 
-    def fit(self, sess, trajs, qvals):
+    def fit(self, trajs, qvals):
         return []
 
-    def predict(self, sess, trajs):
+    def predict(self, trajs):
         return np.zeros_like(trajs.r.stacked)
 
-    def update_obsnorm(self, sess, obs):
+    def update_obsnorm(self, obs):
         pass

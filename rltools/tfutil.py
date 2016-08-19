@@ -106,10 +106,11 @@ class TFFunction(object):
         self._outputs = outputs
         self._updates = [] if updates is None else updates
 
-    def __call__(self, *inputs_):
+    def __call__(self, *inputs_, **kwargs):
         assert len(inputs_) == len(self._inputs)
         feed_dict = dict(zip(self._inputs, inputs_))
-        results = tf.get_default_session().run(self._outputs + self._updates, feed_dict=feed_dict)
+        sess = kwargs.pop('sess', tf.get_default_session())
+        results = sess.run(self._outputs + self._updates, feed_dict=feed_dict)
         if any(result is not None and np.isnan(result).any() for result in results):
             raise RuntimeError("NaN encountered")
 

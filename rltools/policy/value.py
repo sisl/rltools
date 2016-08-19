@@ -49,9 +49,9 @@ class ValuePolicy(Policy):
 
             self._tbwriter = tf.train.SummaryWriter(tblog, graph=tf.get_default_graph())
 
-    def update_obsnorm(self, sess, obs_B_Do):
+    def update_obsnorm(self, obs_B_Do):
         """Update norms using moving avg"""
-        self.obsnorm.update(sess, obs_B_Do)
+        self.obsnorm.update(obs_B_Do)
 
     def _make_actionval_ops(self, obsfeat_B_Df):
         """Ops to compute action scores 

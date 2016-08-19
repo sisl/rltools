@@ -47,9 +47,9 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 if itr == 0:
                     # extra batch to init std
                     trajbatch0, _ = self.sampler.sample(sess, itr)
-                    self.policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                    self.baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                    self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
+                    self.policy.update_obsnorm(trajbatch0.obsfeat.stacked)
+                    self.baseline.update_obsnorm(trajbatch0.obsfeat.stacked)
+                    self.sampler.rewnorm.update(trajbatch0.r.stacked[:, None])
                 trajbatch, sample_info_fields = self.sampler.sample(sess, itr)
 
             # Compute baseline
@@ -66,8 +66,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                                                    trajbatch_vals['advantage'],
                                                    trajbatch_vals['valids'] if self.policy.recurrent
                                                    else None)
-                self.policy.update_obsnorm(sess, trajbatch.obsfeat.stacked)
-                self.sampler.rewnorm.update(sess, trajbatch.r.stacked[:, None])
+                self.policy.update_obsnorm(trajbatch.obsfeat.stacked)
+                self.sampler.rewnorm.update(trajbatch.r.stacked[:, None])
         # LOG
         self.total_time += t_all.dt
 
