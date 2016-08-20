@@ -23,6 +23,7 @@ class SimpleSampler(Sampler):
         trajs = []
         timesteps_sofar = 0
         while True:
+            self.algo.policy.reset()
             traj = centrollout(self.algo.env, self.algo.obsfeat_fn,
                                lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                self.max_traj_len, self.algo.policy.action_space)
@@ -63,6 +64,7 @@ class DecSampler(Sampler):
         trajs = []
         timesteps_sofar = 0
         while True:
+            self.algo.policy.reset()
             ag_trajs = decrollout(self.algo.env, self.algo.obsfeat_fn,
                                   lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                   self.max_traj_len, self.algo.policy.action_space)

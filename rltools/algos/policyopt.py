@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 import numpy as np
 
-from rltools import util
+from rltools import util, trajutil
 from rltools.algos import RLAlgorithm
 from rltools.samplers.serial import SimpleSampler
 from rltools.samplers.parallel import ParallelSampler
@@ -63,9 +63,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             with util.Timer() as t_step:
                 params0_P = self.policy.get_params()
                 step_print_fields = self.step_func(self.policy, trajbatch,
-                                                   trajbatch_vals['advantage'],
-                                                   trajbatch_vals['valids'] if self.policy.recurrent
-                                                   else None)
+                                                   trajbatch_vals['advantage'])
                 self.policy.update_obsnorm(trajbatch.obsfeat.stacked)
                 self.sampler.rewnorm.update(trajbatch.r.stacked[:, None])
         # LOG
@@ -92,17 +90,20 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg_iter=10,
          enable_bt=True):
 
-    def trpo_step(policy, trajbatch, advantages, valid=None):
-        # standardize advantage
-        advstacked_N = util.standardized(advantages.stacked)
-
-        if valid is None:
-            valid = tuple()
+    def trpo_step(policy, trajbatch, advantages):
+        if policy.recurrent:
+            # standardize advantage
+            advpadded_N_H = (advantages.padded(fill=0.) - np.mean(advantages.stacked)) / (
+                np.std(advantages.stacked) + 1e-8)
+            valid = trajutil.RaggedArray([np.ones(trajlen) for trajlen in advantages.lengths])
+            feed = (trajbatch.obsfeat.padded(fill=0.), trajbatch.a.padded(fill=0.),
+                    trajbatch.adist.padded(fill=0.), advpadded_N_H, valid.padded(fill=0.))
         else:
-            valid = (valid,)
-        # Compute objective, KL divergence and gradietns at init point
-        feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked,
-                advstacked_N) + valid
+            # standardize advantage
+            advstacked_N = util.standardized(advantages.stacked)
+            # Compute objective, KL divergence and gradietns at init point
+            feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked,
+                    advstacked_N)
 
         step_info = policy._ngstep(feed, max_kl=max_kl, damping=damping,
                                    subsample_hvp_frac=subsample_hvp_frac,
@@ -149,17 +150,16 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
             if blend_freq > 0:
                 assert self.target_policy is not None
                 assert np.isclose(sum(self.weights), 1)
-                params_P_ag = [policy.get_params(sess) for policy in self.policies]
+                params_P_ag = [policy.get_params() for policy in self.policies]
                 weightparams_P = np.sum([w * p for w, p in util.safezip(self.weights, params_P_ag)])
                 if itr == 0:
-                    blendparams_P = 0.001 * self.target_policy.get_params(
-                        sess) + 0.999 * weightparams_P
+                    blendparams_P = 0.001 * self.target_policy.get_params() + 0.999 * weightparams_P
                 if itr > 1 and (itr % blend_freq == 0 or itr % self.n_iter):
-                    blendparams_P = self.interp_alpha * self.target_policy.get_params(sess) + (
+                    blendparams_P = self.interp_alpha * self.target_policy.get_params() + (
                         1 - self.interp_alpha) * weightparams_P
-                self.target_policy.set_params(sess, blendparams_P)
+                self.target_policy.set_params(blendparams_P)
                 for policies in self.policies:
-                    policies.set_params(sess, blendparams_P)
+                    policies.set_params(blendparams_P)
 
     def step(self, sess, itr):
         with util.Timer() as t_all:
@@ -169,9 +169,9 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     trajbatchlist0, _ = self.sampler.sample(sess, itr)
                     for policy, baseline, trajbatch0 in util.safezip(self.policies, self.baselines,
                                                                      trajbatchlist0):
-                        policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                        baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                        self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
+                        policy.update_obsnorm(trajbatch0.obsfeat.stacked)
+                        baseline.update_obsnorm(trajbatch0.obsfeat.stacked)
+                        self.sampler.rewnorm.update(trajbatch0.r.stacked[:, None])
                 trajbatchlist, sampler_info_fields = self.sampler.sample(sess, itr)
 
             # Baseline
@@ -190,13 +190,13 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                 step_print_fields_list = []
                 params0_P_list = []
                 for agid, policy in enumerate(self.policies):
-                    params0_P = policy.get_params(sess)
+                    params0_P = policy.get_params()
                     params0_P_list.append(params0_P)
-                    step_print_fields = self.step_func(sess, policy, trajbatchlist[agid],
+                    step_print_fields = self.step_func(policy, trajbatchlist[agid],
                                                        trajbatch_vals_list[agid]['advantage'])
                     step_print_fields_list += step_print_fields
-                    policy.update_obsnorm(sess, trajbatchlist[agid].obsfeat.stacked)
-                    self.sampler.rewnorm.update(sess, trajbatchlist[agid].r.stacked[:, None])
+                    policy.update_obsnorm(trajbatchlist[agid].obsfeat.stacked)
+                    self.sampler.rewnorm.update(trajbatchlist[agid].r.stacked[:, None])
 
         # LOG
         self.total_time += t_all.dt
@@ -209,7 +209,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                 ('ent_{}'.format(agid), self.policies[agid]._compute_actiondist_entropy(
                     trajbatchlist[agid].adist.stacked).mean(), float),
                 ('dx_{}'.format(agid),
-                 util.maxnorm(params0_P_list[agid] - self.policies[agid].get_params(sess)), float)
+                 util.maxnorm(params0_P_list[agid] - self.policies[agid].get_params()), float)
             ]
         fields = [
             ('iter', itr, int)

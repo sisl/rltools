@@ -247,13 +247,13 @@ class RolloutServer(object):
         tf.set_random_seed(seed)
         random.seed(seed)
         if self.mode == 'concurrent':
-            traj = self.rollout_fn(
-                self.env, self.obsfeat_fn,
-                [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
-                self.max_traj_len, self.action_space)
-        else:
+            [policy.reset() for policy in self.policy]
             traj = self.rollout_fn(self.env, self.obsfeat_fn,
-                                   lambda ofeat: self.policy.sample_actions(ofeat),
+                                   [policy.sample_actions for policy in self.policy],
+                                   self.max_traj_len, self.action_space)
+        else:
+            self.policy.reset()
+            traj = self.rollout_fn(self.env, self.obsfeat_fn, self.policy.sample_actions,
                                    self.max_traj_len, self.action_space)
 
         return _dumps(traj)
