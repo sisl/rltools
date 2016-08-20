@@ -4,7 +4,7 @@ import numpy as np
 import tensorflow as tf
 
 from rltools import nn, tfutil
-from rltools.distributions import Gaussian
+from rltools.distributions import Gaussian, RecurrentGaussian
 from rltools.policy.stochastic import StochasticPolicy
 from rltools.util import EzPickle
 
@@ -76,3 +76,132 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
     def _compute_actiondist_entropy(self, actiondist_B_Pa):
         _, stdevs_B_Da = self._extract_actiondist_params(actiondist_B_Pa)
         return self.distribution.entropy(stdevs_B_Da)
+
+
+class GaussianGRUPolicy(StochasticPolicy, EzPickle):
+
+    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
+                 init_logstdev, state_include_action, tblog, varscope_name):
+        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
+                          init_logstdev, tblog, varscope_name)
+        self.hidden_spec = hidden_spec
+        self.min_stdev = min_stdev
+        self.init_logstdev = init_logstdev
+        self.state_include_action = state_include_action  # TODO add to stochastic policy
+        self._dist = RecurrentGaussian(action_space.shape[0])
+        self.prev_actions = None
+        self.prev_hiddens = None
+        super(GaussianGRUPolicy, self).__init__(obsfeat_space,
+                                                action_space,
+                                                action_space.shape[0] *
+                                                2,  # Mean and diagonal stdev
+                                                enable_obsnorm,
+                                                tblog,
+                                                varscope_name)
+
+    @property
+    def distribution(self):
+        return self._dist
+
+    @property
+    def recurrent(self):
+        return True
+
+    def _make_actiondist_ops(self, obsfeat_B_H_Df):
+        B = tf.shape(obsfeat_B_H_Df)[0]
+        H = tf.shape(obsfeat_B_H_Df)[1]
+        flatobsfeat_B_H_Df = tf.reshape(obsfeat_B_H_Df, tf.pack([B, H, -1]))
+        if self.state_include_action:
+            net_in = tf.concat(2, [flatobsfeat_B_H_Df, self._prev_actions_B_H_Da])
+            net_shape = (np.prod(self.obsfeat_space.shape) + self.action_space.shape[0],)
+        else:
+            net_in = flatobsfeat_B_H_Df
+            net_shape = (np.prod(self.obsfeat_space.shape),)
+        with tf.variable_scope('meannet'):
+            meannet = nn.GRUNet(net_in, net_shape, self.action_space.shape[0], self.hidden_spec)
+
+        # XXX
+        self.hidden_dim = meannet._hidden_dim
+
+        means_B_H_Da = meannet.output
+        # logstdev params
+        logstdevs_1_H_Da = tf.get_variable('logstdevs_1_H_Da',
+                                           shape=(1, None, self.action_space.shape[0]),
+                                           initializer=tf.constant_initializer(self.init_logstdev))
+        stdevs_1_H_Da = self.min_stdev + tf.exp(
+            logstdevs_1_H_Da)  # Required for stability of kl computations
+        stdevs_B_H_Da = tf.ones_like(means_B_H_Da) * stdevs_1_H_Da
+        actiondist_B_H_Da = tf.concat(2, [means_B_H_Da, stdevs_B_H_Da])
+
+        steplogstdevs_B_Da = tf.get_variable(
+            'steplogstdevs_B_H_Da', shape=(None, self.action_space.shape[0]),
+            initializer=tf.constant_initializer(self.init_logstdev))
+        stepstdevs_B_Da = self.min_stdev + tf.exp(steplogstdevs_B_Da)
+
+        if self.state_include_action:
+            indim = np.prod(self.obsfeat_space.shape) + self.action_space.shape[0]
+        else:
+            indim = np.prod(self.obsfeat_space.shape)
+
+        _flatinnet = tf.placeholder(dtype=tf.float32, shape=(None, indim), name="flat_input")
+        compute_step_mean_std = tfutil.function(
+            [_flatinnet, meannet.step_prev_hidden],
+            [meannet.step_output, stepstdevs_B_Da, meannet.step_hidden])
+
+        return actiondist_B_H_Da, _flatinnet, compute_step_mean_std, meannet.hid_init
+
+    def _extract_actiondist_params(self, actiondist_B_H_Pa):
+        means_B_H_Da = actiondist_B_H_Pa[..., :self.action_space.shape[0]]
+        stdevs_B_H_Da = actiondist_B_H_Pa[..., self.action_space.shape[0]:]
+        return means_B_H_Da, stdevs_B_H_Da
+
+    def _make_actiondist_logprobs_ops(self, actiondist_B_H_Pa, input_actions_B_H_Da):
+        means_B_H_Da, stdevs_B_H_Da = self._extract_actiondist_params(actiondist_B_H_Pa)
+        return self.distribution.log_density_expr(means_B_H_Da, stdevs_B_H_Da, input_actions_B_H_Da)
+
+    def _make_actiondist_kl_ops(self, proposal_actiondist_B_H_Pa, actiondist_B_H_Pa):
+        return self.distribution.kl_expr(*map(self._extract_actiondist_params,
+                                              [proposal_actiondist_B_H_Pa, actiondist_B_H_Pa]))
+
+    def _compute_actiondist_entropy(self, actiondist_B_H_Pa):
+        _, stdevs_B_H_Da = self._extract_actiondist_params(actiondist_B_H_Pa)
+        return self.distribution.entropy(stdevs_B_H_Da)
+
+    def reset(self, dones=None):
+        if dones is None:
+            dones = [True]
+            dones = np.asarray(dones)
+        if self.prev_actions is None or len(dones) != len(self.prev_actions):
+            self.prev_actions = np.zeros((len(dones), self.action_space.shape[0]))
+            self.prev_hiddens = np.zeros((len(dones), self.hidden_dim))
+
+        self.prev_actions[dones] = 0.
+        self.prev_hiddens[dones] = self._hidden_vec.eval()
+
+    def sample_actions(self, obsfeat_B_Df, deterministic=False):
+        B = obsfeat_B_Df.shape[0]
+        flat_obsfeat_B_Df = obsfeat_B_Df.reshape((B, -1))
+        if self.state_include_action:
+            assert self.prev_actions is not None
+            net_in_B_Do = np.concatenate([flat_obsfeat_B_Df, self.prev_actions], axis=-1)
+        else:
+            net_in_B_Do = flat_obsfeat_B_Df
+
+        means_B_Da, stdevs_B_Da, hidden_vec = self.compute_step_mean_std(net_in_B_Do,
+                                                                         self.prev_hiddens)
+        if deterministic:
+            actions_B_Da = means_B_Da
+        else:
+            actions_B_Da = (np.random.randn(means_B_Da.shape[0], self.action_space.shape[0]) *
+                            stdevs_B_Da) + means_B_Da
+
+        prev_actions_B_Da = self.prev_actions
+        self.prev_actions = actions_B_Da
+        self.prev_hiddens = hidden_vec
+
+        # if self.state_include_action:
+        #     actiondist_B_Da = np.concatenate([means_B_Da, stdevs_B_Da, prev_actions_B_Da], axis=1)
+        # else:
+        actiondist_B_Da = np.concatenate([means_B_Da, stdevs_B_Da], axis=1)
+
+        return actions_B_Da, actiondist_B_Da
