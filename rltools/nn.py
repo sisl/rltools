@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import tensorflow as tf
 
-from rltools import util
+from rltools import util, tfutil
 
 
 class Model(object):
@@ -212,11 +212,110 @@ class ConvLayer(Layer):
     def output_shape(self):
         return self._output_shape
 
+class GRULayer(Layer):
+
+    def __init__(self, input_B_H_Di, input_shape, hidden_units, hidden_nonlin, initializer,
+                 hidden_init_trainable):
+        if hidden_nonlin is None:
+            hidden_nonlin = tf.identity
+
+        self._hidden_units = hidden_units
+        self._input_B_H_Di = input_B_H_Di
+        self._input_shape = input_shape
+        self.gate_nonlin = tf.nn.sigmoid
+        self.hidden_nonlin = hidden_nonlin
+        with tf.variable_scope(type(self).__name__) as self.varscope:
+            if initializer is None:
+                initializer = tf.contrib.xavier_initializer()
+
+            input_shape = self._input_shape  # (B, steps) removed
+            input_dim = np.prod(input_shape)
+            # Initial Hidden state weights
+            self.h0 = tf.get_variable('h0', shape=[hidden_units],
+                                      initializer=tf.constant_initializer(0.),
+                                      trainable=hidden_init_trainable)
+
+            with tf.variable_scope('reset'):
+                # Reset Gate
+                self.W_xr_Di_H = tf.get_variable('W_xr', shape=[input_dim, hidden_units],
+                                                 initializer=initializer)
+                self.W_hr_H_H = tf.get_variable('W_hr', shape=[hidden_units, hidden_units],
+                                                initializer=initializer)
+                self.b_r_H = tf.get_variable('b_r', shape=[hidden_units],
+                                             initializer=tf.constant_initializer(0.))
+
+            with tf.variable_scope('update'):
+                # Update Gate
+                self.W_xu_Di_H = tf.get_variable('W_xu', shape=[input_dim, hidden_units],
+                                                 initializer=initializer)
+                self.W_hu_H_H = tf.get_variable('W_hu', shape=[hidden_units, hidden_units],
+                                                initializer=initializer)
+                self.b_u_H = tf.get_variable('b_u', shape=[hidden_units],
+                                             initializer=tf.constant_initializer(0.))
+
+            with tf.variable_scope('cell'):
+                # Cell Gate
+                self.W_xc_Di_H = tf.get_variable('W_xc', shape=[input_dim, hidden_units],
+                                                 initializer=initializer)
+                self.W_hc_H_H = tf.get_variable('W_hc', shape=[hidden_units, hidden_units],
+                                                initializer=initializer)
+                self.b_c_H = tf.get_variable('b_c', shape=[hidden_units],
+                                             initializer=tf.constant_initializer(0.))
+
+            self.W_x_ruc_Di_3H = tf.concat(1, [self.W_xr_Di_H, self.W_xu_Di_H, self.W_xc_Di_H])
+            self.W_h_ruc_H_3H = tf.concat(1, [self.W_hr_H_H, self.W_hu_H_H, self.W_hc_H_H])
+
+        self._output_shape = (self._hidden_units,)
+
+    def step(self, x, hprev):
+        x_ruc = tf.matmul(x, self.W_x_ruc_Di_3H)
+        h_ruc = tf.matmul(hprev, self.W_h_ruc_H_3H)
+        x_r_Di_H, x_u_Di_H, x_c_Di_H = tf.split(split_dim=1, num_split=3, value=x_ruc)
+        h_r, h_u, h_c = tf.split(split_dim=1, num_split=3, value=h_ruc)
+        r = self.gate_nonlin(x_r_Di_H + h_r + self.b_r_H)
+        u = self.gate_nonlin(x_u_Di_H + h_u + self.b_u_H)
+        c = self.hidden_nonlin(x_c_Di_H + r * h_c + self.b_c_H)
+        h = (1 - u) * hprev + u * c
+        return h
+
+    def step_layer(self, inp, prev_hidden):
+        return GRUStepLayer([inp, prev_hidden], gru_layer=self)
 
     @property
-    def output(self): return self.output_B_Oh_Ow_Co
+    def output(self):
+        """Iterate through hidden states to get outputs for all"""
+        input_shape = tf.shape(self._input_B_H_Di)
+        input = tf.reshape(self._input_B_H_Di, tf.pack([input_shape[0], input_shape[1], -1]))
+        h0s = tf.tile(tf.reshape(self.h0, (1, self._hidden_units)), (input_shape[0], 1))
+        # Flatten extra dimension
+        shuffled_input = tf.transpose(input, (1, 0, 2))
+        hs = tf.scan(self.step, elems=shuffled_input, initializer=h0s)
+        shuffled_hs = tf.transpose(hs, (1, 0, 2))
+        return shuffled_hs
+
     @property
-    def output_shape(self): return self._output_shape
+    def output_shape(self):
+        return self._output_shape
+
+
+class GRUStepLayer(Layer):
+
+    def __init__(self, inputs, gru_layer):
+        assert all([not isinstance(inp, Layer) for inp in inputs])
+        self.inputs = inputs
+        self._gru_layer = gru_layer
+
+    @property
+    def output(self):
+        x, hprev = self.inputs
+        n_batch = tf.shape(x)[0]
+        x = tf.reshape(x, tf.pack([n_batch, -1]))
+        return self._gru_layer.step(x, hprev)
+
+    @property
+    def output_shape(self):
+        return (self._gru_layer._hidden_units,)
+
 
 def _check_keys(d, keys, optional):
     s = set(d.keys())
