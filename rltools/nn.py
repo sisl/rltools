@@ -394,6 +394,85 @@ class FeedforwardNet(Layer):
         return self._output_shape
 
 
+class GRUNet(Layer):
+    # Mostly based on rllab's
+    def __init__(self,
+                 input_B_H_Di,
+                 input_shape,
+                 output_dim,
+                 layer_specjson  # hidden_dim, output_dim, hidden_nonlin=tf.nn.relu,
+                 # hidden_init_trainable=False
+                ):
+        layerspec = json.loads(layer_specjson)
+        util.ok('Loading GRUNet specification')
+        util.header(json.dumps(layerspec, indent=2, separators=(',', ': ')))
+        self._hidden_dim = layerspec['gru_hidden_dim']
+        self._hidden_nonlin = {'relu': tf.nn.relu,
+                               'elu': tf.nn.elu,
+                               'tanh': tf.tanh,
+                               'identity': tf.identity}[layerspec['gru_hidden_nonlin']]
+        self._hidden_init_trainable = layerspec['gru_hidden_init_trainable']
+        self._output_dim = output_dim
+        assert len(input_shape) >= 1  # input_shape is Di
+        self.input_B_H_Di = input_B_H_Di
+        with tf.variable_scope(type(self).__name__) as self.varscope:
+            with tf.variable_scope('step'):
+                self._step_input = tf.placeholder(tf.float32, shape=(None,) + input_shape,
+                                                  name='input')
+                self._step_prev_hidden = tf.placeholder(tf.float32, shape=(None, self._hidden_dim),
+                                                        name='prev_hidden')
+
+            self._gru_layer = GRULayer(input_B_H_Di, input_shape, hidden_units=self._hidden_dim,
+                                       hidden_nonlin=self._hidden_nonlin, initializer=None,
+                                       hidden_init_trainable=self._hidden_init_trainable)
+            self._gru_flat_layer = ReshapeLayer(self._gru_layer.output,
+                                                (-1, self._hidden_dim))  # (B*step, hidden_dim)
+            self._output_flat_layer = AffineLayer(self._gru_flat_layer.output,
+                                                  self._gru_flat_layer.output_shape,
+                                                  output_shape=(self._output_dim,),
+                                                  Winitializer=None, binitializer=None)
+
+            self._output = tf.reshape(self._output_flat_layer.output, tf.pack(
+                (tf.shape(self.input_B_H_Di)[0], tf.shape(self.input_B_H_Di)[1], -1)))
+            self._output_shape = (self._output_flat_layer.output_shape[-1],)
+            self._step_hidden_layer = self._gru_layer.step_layer(self._step_input,
+                                                                 self._step_prev_hidden)
+            self._step_output_layer = AffineLayer(self._step_hidden_layer.output,
+                                                  self._step_hidden_layer.output_shape,
+                                                  output_shape=(output_dim,),
+                                                  Winitializer=self._output_flat_layer.W_Di_Do,
+                                                  binitializer=self._output_flat_layer.b_1_Do)
+            self._hid_init = self._gru_layer.h0
+
+    @property
+    def output(self):
+        return self._output
+
+    @property
+    def output_shape(self):
+        return self._output_shape
+
+    @property
+    def step_input(self):
+        return self._step_input
+
+    @property
+    def step_hidden(self):
+        return self._step_hidden_layer.output
+
+    @property
+    def step_prev_hidden(self):
+        return self._step_prev_hidden
+
+    @property
+    def step_output(self):
+        return self._step_output_layer.output
+
+    @property
+    def hid_init(self):
+        return self._hid_init
+
+
 class NoOpStandardizer(object):
 
     def __init__(self, dim, eps=1e-6):
