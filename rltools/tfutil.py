@@ -49,7 +49,7 @@ def flatcat(arrays, name=None):
     Flattens arrays and concatenates them in order.
     """
     with tf.op_scope(arrays, name, 'flatcat') as scope:
-        return tf.concat(0, [tf.reshape(a, [-1]) for a in arrays], name=scope)
+        return tf.concat(0, [tf.reshape(a, [-1]) for a in arrays if a is not None], name=scope)
 
 
 def unflatten_into_tensors(flatparams_P, output_shapes, name=None):
