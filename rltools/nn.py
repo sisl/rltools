@@ -150,9 +150,18 @@ class AffineLayer(Layer):
                 Winitializer = tf.contrib.layers.xavier_initializer()
             if binitializer is None:
                 binitializer = tf.zeros_initializer
-            self.W_Di_Do = tf.get_variable('W', shape=[input_shape[0], output_shape[0]],
-                                           initializer=Winitializer)
-            self.b_1_Do = tf.get_variable('b', shape=[1, output_shape[0]], initializer=binitializer)
+            if not hasattr(Winitializer, '__call__'):
+                assert isinstance(Winitializer, (tf.Tensor, tf.Variable))
+                self.W_Di_Do = Winitializer
+            else:
+                self.W_Di_Do = tf.get_variable('W', shape=[input_shape[0], output_shape[0]],
+                                               initializer=Winitializer)
+            if not hasattr(binitializer, '__call__'):
+                assert isinstance(binitializer, (tf.Tensor, tf.Variable))
+                self.b_1_Do = binitializer
+            else:
+                self.b_1_Do = tf.get_variable('b', shape=[1, output_shape[0]],
+                                              initializer=binitializer)
             self.output_B_Do = tf.matmul(input_B_Di, self.W_Di_Do) + self.b_1_Do
 
     @property
