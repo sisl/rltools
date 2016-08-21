@@ -235,7 +235,7 @@ class GRULayer(Layer):
         self.hidden_nonlin = hidden_nonlin
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if initializer is None:
-                initializer = tf.contrib.xavier_initializer()
+                initializer = tf.contrib.layers.xavier_initializer()
 
             input_shape = self._input_shape  # (B, steps) removed
             input_dim = np.prod(input_shape)
@@ -435,7 +435,7 @@ class GRUNet(Layer):
                                        hidden_nonlin=self._hidden_nonlin, initializer=None,
                                        hidden_init_trainable=self._hidden_init_trainable)
             self._gru_flat_layer = ReshapeLayer(self._gru_layer.output,
-                                                (-1, self._hidden_dim))  # (B*step, hidden_dim)
+                                                (self._hidden_dim,))  # (B*step, hidden_dim)
             self._output_flat_layer = AffineLayer(self._gru_flat_layer.output,
                                                   self._gru_flat_layer.output_shape,
                                                   output_shape=(self._output_dim,),
