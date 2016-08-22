@@ -185,11 +185,19 @@ class NonlinearityLayer(Layer):
 
 class ConvLayer(Layer):
 
-    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Oh, Ow, Sh, Sw, padding,
+    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Sh, Sw, padding,
                  initializer):
         # TODO: calculate Oh and Ow from the other stuff.
+        import IPython
+        IPython.embed()
         assert len(input_shape) == 3
-        Ci = input_shape[2]
+        Ih, Iw, Ci = input_shape
+        if padding == 'SAME':
+            Oh = ceil(float(Ih) / float(Sh))
+            Ow = ceil(float(Iw) / float(Sw))
+        elif padding == 'VALID':
+            Oh = ceil(float(Ih - Fh + 1) / float(Sh))
+            Ow = ceil(float(Iw - Fw + 1) / float(Sw))
         util.header(
             'Conv(chanin=%d, chanout=%d, filth=%d, filtw=%d, outh=%d, outw=%d, strideh=%d, stridew=%d, padding=%s)'
             % (Ci, Co, Fh, Fw, Oh, Ow, Sh, Sw, padding))
@@ -265,12 +273,11 @@ class FeedforwardNet(Layer):
 
                     elif ls['type'] == 'conv':
                         _check_keys(ls,
-                                    ['type', 'chanout', 'filtsize', 'outsize', 'stride', 'padding'],
+                                    ['type', 'chanout', 'filtsize', 'stride', 'padding'],
                                     ['initializer'])
                         self.layers.append(
                             ConvLayer(input_B_Ih_Iw_Ci=prev_output, input_shape=prev_output_shape,
-                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'], Oh=ls[
-                                          'outsize'], Ow=ls['outsize'], Sh=ls['stride'], Sw=ls[
+                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'], Sh=ls['stride'], Sw=ls[
                                               'stride'], padding=ls['padding'],
                                       initializer=_parse_initializer(ls)))
 
