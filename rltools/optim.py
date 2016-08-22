@@ -141,7 +141,7 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
 
             def klgrad_func(p):
                 with model.try_params(p):
-                    klgrad = compute_hvp_helper(subsamp_feed)
+                    klgrad = compute_hvp_helper(*subsamp_feed)
                 return klgrad
 
             return numdiff_hvp(v, klgrad_func, params0)

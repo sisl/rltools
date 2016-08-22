@@ -12,8 +12,7 @@ from rltools.policy import Policy
 
 class StochasticPolicy(Policy):
 
-    def __init__(self, obsfeat_space, action_space, num_actiondist_params, enable_obsnorm, tblog,
-                 varscope_name):
+    def __init__(self, obsfeat_space, action_space, num_actiondist_params, tblog, varscope_name):
         super(StochasticPolicy, self).__init__(obsfeat_space, action_space)
 
         with tf.variable_scope(varscope_name) as self.varscope:
@@ -40,11 +39,7 @@ class StochasticPolicy(Policy):
             self._obsfeat_B_Df = tf.placeholder(
                 tf.float32, obsfeat_shape,
                 name='obsfeat_B_Df')  # Df = feature dimensions FIXME shape
-            with tf.variable_scope('obsnorm'):
-                self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
-            self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
-
+            self._normalized_obsfeat_B_Df = self._obsfeat_B_Df
             if self.recurrent:
                 action_shape = list((batch_size, None, action_dim))
             else:
@@ -120,11 +115,13 @@ class StochasticPolicy(Policy):
             self._curr_all_params_PA = tfutil.flatcat(self._all_param_vars)
 
             # Gradients of objective
-            self._reinfobj_grad_P = tfutil.flatcat(tf.gradients(self._reinfobj, self._param_vars))
-            self._penobj_grad_P = tfutil.flatcat(tf.gradients(self._penobj, self._param_vars))
+            self._reinfobj_grad_P = tfutil.flatcat(
+                tfutil.fixedgradients(self._reinfobj, self._param_vars))
+            self._penobj_grad_P = tfutil.flatcat(
+                tfutil.fixedgradients(self._penobj, self._param_vars))
 
             # KL gradient for TRPO
-            self._kl_grad_P = tfutil.flatcat(tf.gradients(self._kl, self._param_vars))
+            self._kl_grad_P = tfutil.flatcat(tfutil.fixedgradients(self._kl, self._param_vars))
 
             # Writing params
             self._flatparams_P = tf.placeholder(tf.float32, [self._num_params], name='flatparams_P')
@@ -180,10 +177,6 @@ class StochasticPolicy(Policy):
     @property
     def distribution(self):
         raise NotImplementedError()
-
-    def update_obsnorm(self, obs_B_Do):
-        """Update norms using moving avg"""
-        self.obsnorm.update(obs_B_Do)
 
     def _make_actiondist_ops(self, obsfeat_B_Df):
         """Ops to compute action distribution parameters

@@ -13,11 +13,10 @@ class MLPBaseline(Baseline, nn.Model):
     Optimized using natural gradients.
     """
 
-    def __init__(self, obsfeat_space, hidden_spec, enable_obsnorm, enable_vnorm, max_kl, damping,
-                 varscope_name, subsample_hvp_frac=.1, grad_stop_tol=1e-6, time_scale=1.):
+    def __init__(self, obsfeat_space, hidden_spec, enable_vnorm, max_kl, damping, varscope_name,
+                 subsample_hvp_frac=.1, grad_stop_tol=1e-6, time_scale=1.):
         self.obsfeat_space = obsfeat_space
         self.hidden_spec = hidden_spec
-        self.enable_obsnorm = enable_obsnorm
         self.enable_vnorm = enable_vnorm
         self.max_kl = max_kl
         self.damping = damping
@@ -26,9 +25,9 @@ class MLPBaseline(Baseline, nn.Model):
         self.time_scale = time_scale
 
         with tf.variable_scope(varscope_name) as self.varscope:
-            with tf.variable_scope('obsnorm'):
-                self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
+            # with tf.variable_scope('obsnorm'):
+            #     self.obsnorm = (nn.Standardizer if enable_obsnorm else
+            #                     nn.NoOpStandardizer)(self.obsfeat_space.shape)
             with tf.variable_scope('vnorm'):
                 self.vnorm = (nn.Standardizer if enable_vnorm else nn.NoOpStandardizer)(1)
 
@@ -90,10 +89,6 @@ class MLPBaseline(Baseline, nn.Model):
             assert out_layer.output_shape == (1,)
         return out_layer.output[:, 0]
 
-    def update_obsnorm(self, obs_B_Do):
-        """Update norms using moving avg"""
-        self.obsnorm.update(obs_B_Do)
-
     @contextmanager
     def try_params(self, params_P):
         orig_params_P = self.get_params()
@@ -106,13 +101,13 @@ class MLPBaseline(Baseline, nn.Model):
         t_B = trajs.time.stacked
 
         # Update norm
-        self.obsnorm.update(obs_B_Do)
+        # self.obsnorm.update(obs_B_Do)
         self.vnorm.update(qval_B[:, None])
 
         # Take step
-        sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
+        # sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
         sqval_B = self.vnorm.standardize(qval_B[:, None])[:, 0]
-        feed = (sobs_B_Do, t_B, sqval_B, self._predict_raw(sobs_B_Do, t_B))
+        feed = (obs_B_Do, t_B, sqval_B, self._predict_raw(obs_B_Do, t_B))
         step_info = self._ngstep(feed, max_kl=self.max_kl, damping=self.damping,
                                  subsample_hvp_frac=self.subsample_hvp_frac,
                                  grad_stop_tol=self.grad_stop_tol)
@@ -126,7 +121,7 @@ class MLPBaseline(Baseline, nn.Model):
     def predict(self, trajs):
         obs_B_Do = trajs.obs.stacked
         t_B = trajs.time.stacked
-        sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
-        pred_B = self.vnorm.unstandardize(self._predict_raw(sobs_B_Do, t_B)[:, None])[:, 0]
+        # sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
+        pred_B = self.vnorm.unstandardize(self._predict_raw(obs_B_Do, t_B)[:, None])[:, 0]
         assert pred_B.shape == t_B.shape
         return pred_B

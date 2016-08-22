@@ -10,10 +10,9 @@ from rltools.trajutil import TrajBatch, Trajectory
 class SimpleSampler(Sampler):
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False, enable_rewnorm=True):
+                 n_timesteps_max, adaptive=False):
         super(SimpleSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                            n_timesteps_min, n_timesteps_max, adaptive,
-                                            enable_rewnorm)
+                                            n_timesteps_min, n_timesteps_max, adaptive)
 
     def sample(self, sess, itr):
         if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
@@ -51,9 +50,9 @@ class SimpleSampler(Sampler):
 class DecSampler(Sampler):
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False, enable_rewnorm=True):
+                 n_timesteps_max, adaptive=False):
         super(DecSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                         n_timesteps_min, n_timesteps_max, adaptive, enable_rewnorm)
+                                         n_timesteps_min, n_timesteps_max, adaptive)
 
     def sample(self, sess, itr):
         if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:

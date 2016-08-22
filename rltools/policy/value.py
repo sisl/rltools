@@ -26,10 +26,7 @@ class ValuePolicy(Policy):
             self._obsfeat_B_Df = tf.placeholder(
                 tf.float32, list((batch_size,) + self.obsfeat_space.shape),
                 name='obsfeat_B_Df')  # Df = feature dimensions FIXME shape
-            with tf.variable_scope('obsnorm'):
-                self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
-            self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
+            self._normalized_obsfeat_B_Df = self._obsfeat_B_Df
             self._actionval_Pa = self._make_actionval_ops(self._normalized_obsfeat_B_Df)
             self._input_action_B_Da = tf.placeholder(
                 action_type, [batch_size, action_dim],

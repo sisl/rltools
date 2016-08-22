@@ -271,14 +271,14 @@ class GRULayer(Layer):
                 self.b_c_H = tf.get_variable('b_c', shape=[hidden_units],
                                              initializer=tf.constant_initializer(0.))
 
-            self.W_x_ruc_Di_3H = tf.concat(1, [self.W_xr_Di_H, self.W_xu_Di_H, self.W_xc_Di_H])
-            self.W_h_ruc_H_3H = tf.concat(1, [self.W_hr_H_H, self.W_hu_H_H, self.W_hc_H_H])
+            self.W_x_ruc_3Di_H = tf.concat(1, [self.W_xr_Di_H, self.W_xu_Di_H, self.W_xc_Di_H])
+            self.W_h_ruc_3H_H = tf.concat(1, [self.W_hr_H_H, self.W_hu_H_H, self.W_hc_H_H])
 
         self._output_shape = (self._hidden_units,)
 
-    def step(self, x, hprev):
-        x_ruc = tf.matmul(x, self.W_x_ruc_Di_3H)
-        h_ruc = tf.matmul(hprev, self.W_h_ruc_H_3H)
+    def step(self, hprev, x):
+        x_ruc = tf.matmul(x, self.W_x_ruc_3Di_H)
+        h_ruc = tf.matmul(hprev, self.W_h_ruc_3H_H)
         x_r_Di_H, x_u_Di_H, x_c_Di_H = tf.split(split_dim=1, num_split=3, value=x_ruc)
         h_r, h_u, h_c = tf.split(split_dim=1, num_split=3, value=h_ruc)
         r = self.gate_nonlin(x_r_Di_H + h_r + self.b_r_H)
@@ -319,7 +319,7 @@ class GRUStepLayer(Layer):
         x, hprev = self.inputs
         n_batch = tf.shape(x)[0]
         x = tf.reshape(x, tf.pack([n_batch, -1]))
-        return self._gru_layer.step(x, hprev)
+        return self._gru_layer.step(hprev, x)
 
     @property
     def output_shape(self):

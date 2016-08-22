@@ -11,10 +11,10 @@ from rltools.util import EzPickle
 
 class GaussianMLPPolicy(StochasticPolicy, EzPickle):
 
-    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                 init_logstdev, tblog, varscope_name):
-        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                          init_logstdev, tblog, varscope_name)
+    def __init__(self, obsfeat_space, action_space, hidden_spec, min_stdev, init_logstdev, tblog,
+                 varscope_name):
+        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, min_stdev, init_logstdev,
+                          tblog, varscope_name)
         self.hidden_spec = hidden_spec
         self.min_stdev = min_stdev
         self.init_logstdev = init_logstdev
@@ -23,7 +23,6 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
                                                 action_space,
                                                 action_space.shape[0] *
                                                 2,  # Mean and diagonal stdev
-                                                enable_obsnorm,
                                                 tblog,
                                                 varscope_name)
 
@@ -80,10 +79,10 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
 
 class GaussianGRUPolicy(StochasticPolicy, EzPickle):
 
-    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                 init_logstdev, state_include_action, tblog, varscope_name):
-        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                          init_logstdev, tblog, varscope_name)
+    def __init__(self, obsfeat_space, action_space, hidden_spec, min_stdev, init_logstdev,
+                 state_include_action, tblog, varscope_name):
+        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, min_stdev, init_logstdev,
+                          state_include_action, tblog, varscope_name)
         self.hidden_spec = hidden_spec
         self.min_stdev = min_stdev
         self.init_logstdev = init_logstdev
@@ -95,7 +94,6 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
                                                 action_space,
                                                 action_space.shape[0] *
                                                 2,  # Mean and diagonal stdev
-                                                enable_obsnorm,
                                                 tblog,
                                                 varscope_name)
 
@@ -123,37 +121,48 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
         # XXX
         self.hidden_dim = meannet._hidden_dim
 
+        # Action Means
         means_B_H_Da = meannet.output
         # logstdev params
-        logstdevs_1_H_Da = tf.get_variable('logstdevs_1_H_Da',
-                                           shape=(1, None, self.action_space.shape[0]),
-                                           initializer=tf.constant_initializer(self.init_logstdev))
-        stdevs_1_H_Da = self.min_stdev + tf.exp(
-            logstdevs_1_H_Da)  # Required for stability of kl computations
-        stdevs_B_H_Da = tf.ones_like(means_B_H_Da) * stdevs_1_H_Da
+        logstdevs_1_Da = tf.get_variable('logstdevs_1_Da', shape=(1, self.action_space.shape[0]),
+                                         initializer=tf.constant_initializer(self.init_logstdev))
+        stdevs_1_Da = self.min_stdev + tf.exp(
+            logstdevs_1_Da)  # Required for stability of kl computations
+        stdevs_B_H_Da = tf.ones_like(means_B_H_Da) * tf.expand_dims(stdevs_1_Da, 1)
         actiondist_B_H_Da = tf.concat(2, [means_B_H_Da, stdevs_B_H_Da])
 
-        steplogstdevs_B_Da = tf.get_variable(
-            'steplogstdevs_B_H_Da', shape=(None, self.action_space.shape[0]),
+        steplogstdevs_1_Da = tf.get_variable(
+            'steplogstdevs_1_Da', shape=(1, self.action_space.shape[0]),
             initializer=tf.constant_initializer(self.init_logstdev))
-        stepstdevs_B_Da = self.min_stdev + tf.exp(steplogstdevs_B_Da)
+        stepstdevs_1_Da = self.min_stdev + tf.exp(steplogstdevs_1_Da)
+        stepstdevs_B_Da = tf.ones_like(meannet.step_output) * stepstdevs_1_Da
 
         if self.state_include_action:
             indim = np.prod(self.obsfeat_space.shape) + self.action_space.shape[0]
         else:
             indim = np.prod(self.obsfeat_space.shape)
 
-        _flatinnet = tf.placeholder(dtype=tf.float32, shape=(None, indim), name="flat_input")
         compute_step_mean_std = tfutil.function(
-            [_flatinnet, meannet.step_prev_hidden],
+            [meannet.step_input, meannet.step_prev_hidden],
             [meannet.step_output, stepstdevs_B_Da, meannet.step_hidden])
 
-        return actiondist_B_H_Da, _flatinnet, compute_step_mean_std, meannet.hid_init
+        return actiondist_B_H_Da, meannet.step_input, compute_step_mean_std, meannet.hid_init
 
-    def _extract_actiondist_params(self, actiondist_B_H_Pa):
-        means_B_H_Da = actiondist_B_H_Pa[..., :self.action_space.shape[0]]
-        stdevs_B_H_Da = actiondist_B_H_Pa[..., self.action_space.shape[0]:]
-        return means_B_H_Da, stdevs_B_H_Da
+    def _extract_actiondist_params(self, actiondist):
+        # Aaaaaargh
+        if isinstance(actiondist, tf.Tensor):
+            ndims = actiondist.get_shape().ndims
+        else:
+            ndims = actiondist.ndim
+        if ndims == 2:
+            means = actiondist[:, :self.action_space.shape[0]]
+            stdevs = actiondist[:, self.action_space.shape[0]:]
+        elif ndims == 3:
+            means = actiondist[:, :, :self.action_space.shape[0]]
+            stdevs = actiondist[:, :, self.action_space.shape[0]:]
+        # means = actiondist[..., :self.action_space.shape[0]]
+        # stdevs = actiondist[..., self.action_space.shape[0]:]
+        return means, stdevs
 
     def _make_actiondist_logprobs_ops(self, actiondist_B_H_Pa, input_actions_B_H_Da):
         means_B_H_Da, stdevs_B_H_Da = self._extract_actiondist_params(actiondist_B_H_Pa)
@@ -203,5 +212,4 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
         #     actiondist_B_Da = np.concatenate([means_B_Da, stdevs_B_Da, prev_actions_B_Da], axis=1)
         # else:
         actiondist_B_Da = np.concatenate([means_B_Da, stdevs_B_Da], axis=1)
-
         return actions_B_Da, actiondist_B_Da

@@ -23,10 +23,9 @@ gevent_log.setLevel(logging.CRITICAL)
 class ThreadedSampler(Sampler):
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False, enable_rewnorm=True, n_workers=4):
+                 n_timesteps_max, adaptive=False, n_workers=4):
         super(ThreadedSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                              n_timesteps_min, n_timesteps_max, adaptive,
-                                              enable_rewnorm)
+                                              n_timesteps_min, n_timesteps_max, adaptive)
 
         self.n_workers = n_workers
 

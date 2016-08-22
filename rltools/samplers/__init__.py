@@ -12,12 +12,11 @@ class Sampler(object):
     """
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive, enable_rewnorm):
+                 n_timesteps_max, adaptive):
         self.algo = algo
         self.n_timesteps = n_timesteps
         self.max_traj_len = max_traj_len
         self.adaptive = adaptive
-        self.rewnorm = (nn.Standardizer if enable_rewnorm else nn.NoOpStandardizer)(1)
         if self.adaptive:
             self.timestep_rate = timestep_rate
             self.n_timesteps_min = n_timesteps_min
@@ -37,7 +36,7 @@ class Sampler(object):
         trajlens = [len(traj) for traj in trajbatch]
         maxT = max(trajlens)
 
-        rewards_B_T = self.rewnorm.standardize(trajbatch.r.padded(fill=0.), centered=False)
+        rewards_B_T = trajbatch.r.padded(fill=0.)
         assert not self.algo.discount is None
         qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, discount)
         assert qvals_zfilled_B_T.shape == (B, maxT)

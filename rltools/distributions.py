@@ -131,7 +131,7 @@ class Gaussian(Distribution):
         with tf.op_scope([means, stdevs, x], name, 'gauss_log_density') as scope:
             D = tf.shape(means)[len(means.get_shape()) - 1]  # XXX
             lognormconsts = -.5 * tf.to_float(D) * np.log(2. * np.pi) + 2. * tf.reduce_sum(
-                tf.log(stdevs), 1)  # log norm consts
+                tf.log(stdevs), -1)  # log norm consts
             logprobs = tf.add(-.5 * tf.reduce_sum(tf.square((x - means) / stdevs), -1),
                               lognormconsts, name=scope)
         return logprobs
