@@ -139,6 +139,7 @@ class FlattenLayer(Layer):
     def output_shape(self):
         return self._output_shape
 
+
 class AffineLayer(Layer):
 
     def __init__(self, input_B_Di, input_shape, output_shape, Winitializer, binitializer):
@@ -221,6 +222,7 @@ class ConvLayer(Layer):
     def output_shape(self):
         return self._output_shape
 
+
 class GRULayer(Layer):
 
     def __init__(self, input_B_H_Di, input_shape, hidden_units, hidden_nonlin, initializer,
@@ -284,7 +286,7 @@ class GRULayer(Layer):
         r = self.gate_nonlin(x_r_Di_H + h_r + self.b_r_H)
         u = self.gate_nonlin(x_u_Di_H + h_u + self.b_u_H)
         c = self.hidden_nonlin(x_c_Di_H + r * h_c + self.b_c_H)
-        h = (1 - u) * hprev + u * c
+        h = u * hprev + (1 - u) * c
         return h
 
     def step_layer(self, inp, prev_hidden):
@@ -446,11 +448,9 @@ class GRUNet(Layer):
             self._output_shape = (self._output_flat_layer.output_shape[-1],)
             self._step_hidden_layer = self._gru_layer.step_layer(self._step_input,
                                                                  self._step_prev_hidden)
-            self._step_output_layer = AffineLayer(self._step_hidden_layer.output,
-                                                  self._step_hidden_layer.output_shape,
-                                                  output_shape=(output_dim,),
-                                                  Winitializer=self._output_flat_layer.W_Di_Do,
-                                                  binitializer=self._output_flat_layer.b_1_Do)
+            self._step_output = tf.matmul(
+                self._step_hidden_layer.output,
+                self._output_flat_layer.W_Di_Do) + self._output_flat_layer.b_1_Do
             self._hid_init = self._gru_layer.h0
 
     @property
@@ -475,7 +475,7 @@ class GRUNet(Layer):
 
     @property
     def step_output(self):
-        return self._step_output_layer.output
+        return self._step_output
 
     @property
     def hid_init(self):

@@ -119,7 +119,7 @@ class TFFunction(object):
         self._updates = [] if updates is None else updates
 
     def __call__(self, *inputs_, **kwargs):
-        assert len(inputs_) == len(self._inputs)
+        assert len(inputs_) == len(self._inputs), '{} != {}'.format(len(inputs_), len(self._inputs))
         feed_dict = dict(zip(self._inputs, inputs_))
         sess = kwargs.pop('sess', tf.get_default_session())
         results = sess.run(self._outputs + self._updates, feed_dict=feed_dict)
