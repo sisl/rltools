@@ -242,8 +242,7 @@ class GRULayer(Layer):
             input_shape = self._input_shape  # (B, steps) removed
             input_dim = np.prod(input_shape)
             # Initial Hidden state weights
-            self.h0 = tf.get_variable('h0', shape=[hidden_units],
-                                      initializer=tf.constant_initializer(0.),
+            self.h0 = tf.get_variable('h0', shape=[hidden_units], initializer=tf.zeros_initializer,
                                       trainable=hidden_init_trainable)
 
             with tf.variable_scope('reset'):
@@ -273,14 +272,14 @@ class GRULayer(Layer):
                 self.b_c_H = tf.get_variable('b_c', shape=[hidden_units],
                                              initializer=tf.constant_initializer(0.))
 
-            self.W_x_ruc_3Di_H = tf.concat(1, [self.W_xr_Di_H, self.W_xu_Di_H, self.W_xc_Di_H])
-            self.W_h_ruc_3H_H = tf.concat(1, [self.W_hr_H_H, self.W_hu_H_H, self.W_hc_H_H])
+            self.W_x_ruc_Di_3H = tf.concat(1, [self.W_xr_Di_H, self.W_xu_Di_H, self.W_xc_Di_H])
+            self.W_h_ruc_H_3H = tf.concat(1, [self.W_hr_H_H, self.W_hu_H_H, self.W_hc_H_H])
 
         self._output_shape = (self._hidden_units,)
 
     def step(self, hprev, x):
-        x_ruc = tf.matmul(x, self.W_x_ruc_3Di_H)
-        h_ruc = tf.matmul(hprev, self.W_h_ruc_3H_H)
+        x_ruc = tf.matmul(x, self.W_x_ruc_Di_3H)
+        h_ruc = tf.matmul(hprev, self.W_h_ruc_H_3H)
         x_r_Di_H, x_u_Di_H, x_c_Di_H = tf.split(split_dim=1, num_split=3, value=x_ruc)
         h_r, h_u, h_c = tf.split(split_dim=1, num_split=3, value=h_ruc)
         r = self.gate_nonlin(x_r_Di_H + h_r + self.b_r_H)
@@ -427,11 +426,11 @@ class GRUNet(Layer):
         assert len(input_shape) >= 1  # input_shape is Di
         self.input_B_H_Di = input_B_H_Di
         with tf.variable_scope(type(self).__name__) as self.varscope:
-            with tf.variable_scope('step'):
-                self._step_input = tf.placeholder(tf.float32, shape=(None,) + input_shape,
-                                                  name='input')
-                self._step_prev_hidden = tf.placeholder(tf.float32, shape=(None, self._hidden_dim),
-                                                        name='prev_hidden')
+
+            self._step_input = tf.placeholder(tf.float32, shape=(None,) + input_shape,
+                                              name='step_input')
+            self._step_prev_hidden = tf.placeholder(tf.float32, shape=(None, self._hidden_dim),
+                                                    name='step_prev_hidden')
 
             self._gru_layer = GRULayer(input_B_H_Di, input_shape, hidden_units=self._hidden_dim,
                                        hidden_nonlin=self._hidden_nonlin, initializer=None,
