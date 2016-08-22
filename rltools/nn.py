@@ -251,7 +251,7 @@ class GRULayer(Layer):
                 self.W_hr_H_H = tf.get_variable('W_hr', shape=[hidden_units, hidden_units],
                                                 initializer=initializer)
                 self.b_r_H = tf.get_variable('b_r', shape=[hidden_units],
-                                             initializer=tf.constant_initializer(0.))
+                                             initializer=tf.constant_initializer(1.))
 
             with tf.variable_scope('update'):
                 # Update Gate
@@ -260,7 +260,7 @@ class GRULayer(Layer):
                 self.W_hu_H_H = tf.get_variable('W_hu', shape=[hidden_units, hidden_units],
                                                 initializer=initializer)
                 self.b_u_H = tf.get_variable('b_u', shape=[hidden_units],
-                                             initializer=tf.constant_initializer(0.))
+                                             initializer=tf.constant_initializer(1.))
 
             with tf.variable_scope('cell'):
                 # Cell Gate
