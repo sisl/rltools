@@ -225,13 +225,13 @@ class ConvLayer(Layer):
 
 class GRULayer(Layer):
 
-    def __init__(self, input_B_H_Di, input_shape, hidden_units, hidden_nonlin, initializer,
+    def __init__(self, input_B_T_Di, input_shape, hidden_units, hidden_nonlin, initializer,
                  hidden_init_trainable):
         if hidden_nonlin is None:
             hidden_nonlin = tf.identity
 
         self._hidden_units = hidden_units
-        self._input_B_H_Di = input_B_H_Di
+        self._input_B_T_Di = input_B_T_Di
         self._input_shape = input_shape
         self.gate_nonlin = tf.nn.sigmoid
         self.hidden_nonlin = hidden_nonlin
@@ -247,44 +247,44 @@ class GRULayer(Layer):
 
             with tf.variable_scope('reset'):
                 # Reset Gate
-                self.W_xr_Di_H = tf.get_variable('W_xr', shape=[input_dim, hidden_units],
+                self.W_xr_Di_T = tf.get_variable('W_xr', shape=[input_dim, hidden_units],
                                                  initializer=initializer)
-                self.W_hr_H_H = tf.get_variable('W_hr', shape=[hidden_units, hidden_units],
-                                                initializer=initializer)
-                self.b_r_H = tf.get_variable('b_r', shape=[hidden_units],
+                self.W_hrT_T = tf.get_variable('W_hr', shape=[hidden_units, hidden_units],
+                                               initializer=initializer)
+                self.b_r_T = tf.get_variable('b_r', shape=[hidden_units],
                                              initializer=tf.constant_initializer(1.))
 
             with tf.variable_scope('update'):
                 # Update Gate
-                self.W_xu_Di_H = tf.get_variable('W_xu', shape=[input_dim, hidden_units],
+                self.W_xu_Di_T = tf.get_variable('W_xu', shape=[input_dim, hidden_units],
                                                  initializer=initializer)
-                self.W_hu_H_H = tf.get_variable('W_hu', shape=[hidden_units, hidden_units],
-                                                initializer=initializer)
-                self.b_u_H = tf.get_variable('b_u', shape=[hidden_units],
+                self.W_huT_T = tf.get_variable('W_hu', shape=[hidden_units, hidden_units],
+                                               initializer=initializer)
+                self.b_u_T = tf.get_variable('b_u', shape=[hidden_units],
                                              initializer=tf.constant_initializer(1.))
 
             with tf.variable_scope('cell'):
                 # Cell Gate
-                self.W_xc_Di_H = tf.get_variable('W_xc', shape=[input_dim, hidden_units],
+                self.W_xc_Di_T = tf.get_variable('W_xc', shape=[input_dim, hidden_units],
                                                  initializer=initializer)
-                self.W_hc_H_H = tf.get_variable('W_hc', shape=[hidden_units, hidden_units],
-                                                initializer=initializer)
-                self.b_c_H = tf.get_variable('b_c', shape=[hidden_units],
+                self.W_hcT_T = tf.get_variable('W_hc', shape=[hidden_units, hidden_units],
+                                               initializer=initializer)
+                self.b_c_T = tf.get_variable('b_c', shape=[hidden_units],
                                              initializer=tf.constant_initializer(0.))
 
-            self.W_x_ruc_Di_3H = tf.concat(1, [self.W_xr_Di_H, self.W_xu_Di_H, self.W_xc_Di_H])
-            self.W_h_ruc_H_3H = tf.concat(1, [self.W_hr_H_H, self.W_hu_H_H, self.W_hc_H_H])
+            self.W_x_ruc_Di_3T = tf.concat(1, [self.W_xr_Di_T, self.W_xu_Di_T, self.W_xc_Di_T])
+            self.W_h_ruc_T_3T = tf.concat(1, [self.W_hrT_T, self.W_huT_T, self.W_hcT_T])
 
         self._output_shape = (self._hidden_units,)
 
     def step(self, hprev, x):
-        x_ruc = tf.matmul(x, self.W_x_ruc_Di_3H)
-        h_ruc = tf.matmul(hprev, self.W_h_ruc_H_3H)
-        x_r_Di_H, x_u_Di_H, x_c_Di_H = tf.split(split_dim=1, num_split=3, value=x_ruc)
+        x_ruc = tf.matmul(x, self.W_x_ruc_Di_3T)
+        h_ruc = tf.matmul(hprev, self.W_h_ruc_T_3T)
+        x_r_Di_T, x_u_Di_T, x_c_Di_T = tf.split(split_dim=1, num_split=3, value=x_ruc)
         h_r, h_u, h_c = tf.split(split_dim=1, num_split=3, value=h_ruc)
-        r = self.gate_nonlin(x_r_Di_H + h_r + self.b_r_H)
-        u = self.gate_nonlin(x_u_Di_H + h_u + self.b_u_H)
-        c = self.hidden_nonlin(x_c_Di_H + r * h_c + self.b_c_H)
+        r = self.gate_nonlin(x_r_Di_T + h_r + self.b_r_T)
+        u = self.gate_nonlin(x_u_Di_T + h_u + self.b_u_T)
+        c = self.hidden_nonlin(x_c_Di_T + r * h_c + self.b_c_T)
         h = u * hprev + (1 - u) * c
         return h
 
@@ -294,8 +294,8 @@ class GRULayer(Layer):
     @property
     def output(self):
         """Iterate through hidden states to get outputs for all"""
-        input_shape = tf.shape(self._input_B_H_Di)
-        input = tf.reshape(self._input_B_H_Di, tf.pack([input_shape[0], input_shape[1], -1]))
+        input_shape = tf.shape(self._input_B_T_Di)
+        input = tf.reshape(self._input_B_T_Di, tf.pack([input_shape[0], input_shape[1], -1]))
         h0s = tf.tile(tf.reshape(self.h0, (1, self._hidden_units)), (input_shape[0], 1))
         # Flatten extra dimension
         shuffled_input = tf.transpose(input, (1, 0, 2))
@@ -407,7 +407,7 @@ class FeedforwardNet(Layer):
 class GRUNet(Layer):
     # Mostly based on rllab's
     def __init__(self,
-                 input_B_H_Di,
+                 input_B_T_Di,
                  input_shape,
                  output_dim,
                  layer_specjson  # hidden_dim, output_dim, hidden_nonlin=tf.nn.relu,
@@ -424,7 +424,7 @@ class GRUNet(Layer):
         self._hidden_init_trainable = layerspec['gru_hidden_init_trainable']
         self._output_dim = output_dim
         assert len(input_shape) >= 1  # input_shape is Di
-        self.input_B_H_Di = input_B_H_Di
+        self.input_B_T_Di = input_B_T_Di
         with tf.variable_scope(type(self).__name__) as self.varscope:
 
             self._step_input = tf.placeholder(tf.float32, shape=(None,) + input_shape,
@@ -432,7 +432,7 @@ class GRUNet(Layer):
             self._step_prev_hidden = tf.placeholder(tf.float32, shape=(None, self._hidden_dim),
                                                     name='step_prev_hidden')
 
-            self._gru_layer = GRULayer(input_B_H_Di, input_shape, hidden_units=self._hidden_dim,
+            self._gru_layer = GRULayer(input_B_T_Di, input_shape, hidden_units=self._hidden_dim,
                                        hidden_nonlin=self._hidden_nonlin, initializer=None,
                                        hidden_init_trainable=self._hidden_init_trainable)
             self._gru_flat_layer = ReshapeLayer(self._gru_layer.output,
@@ -443,7 +443,7 @@ class GRUNet(Layer):
                                                   Winitializer=None, binitializer=None)
 
             self._output = tf.reshape(self._output_flat_layer.output, tf.pack(
-                (tf.shape(self.input_B_H_Di)[0], tf.shape(self.input_B_H_Di)[1], -1)))
+                (tf.shape(self.input_B_T_Di)[0], tf.shape(self.input_B_T_Di)[1], -1)))
             self._output_shape = (self._output_flat_layer.output_shape[-1],)
             self._step_hidden_layer = self._gru_layer.step_layer(self._step_input,
                                                                  self._step_prev_hidden)
