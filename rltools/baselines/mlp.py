@@ -70,6 +70,8 @@ class MLPBaseline(Baseline, nn.Model):
         self._ngstep = optim.make_ngstep_func(self, compute_obj_kl=compute_obj_kl,
                                               compute_obj_kl_with_grad=compute_obj_kl_with_grad,
                                               compute_hvp_helper=compute_klgrad)
+        self.set_params = tfutil.function([self._flatparams_P], [], [self._assign_params])
+        self.get_params = tfutil.function([], self._curr_params_P)
 
     def _make_val_op(self, obsfeat_B_Df, scaled_t_B_1):
         with tf.variable_scope('flat'):
@@ -88,20 +90,12 @@ class MLPBaseline(Baseline, nn.Model):
         """Update norms using moving avg"""
         self.obsnorm.update(obs_B_Do, sess=sess)
 
-    def get_params(self, sess):
-        params_P = sess.run(self._curr_params_P)
-        assert params_P.shape == (self._num_params,)
-        return params_P
-
-    def set_params(self, sess, params_P):
-        sess.run(self._assign_params, {self._flatparams_P: params_P})
-
     @contextmanager
-    def try_params(self, sess, params_P):
-        orig_params_P = self.get_params(sess)
-        self.set_params(sess, params_P)
-        yield
-        self.set_params(sess, orig_params_P)
+    def try_params(self, params_D, **kwargs):
+        orig_params_D = self.get_params(**kwargs)
+        self.set_params(params_D, **kwargs)
+        yield  # Do what you gotta do
+        self.set_params(orig_params_D, **kwargs)
 
     def _predict_raw(self, sess, obsfeat_B_Df, t_B):
         return sess.run(self._val_B, {self._obsfeat_B_Df: obsfeat_B_Df, self._t_B: t_B})

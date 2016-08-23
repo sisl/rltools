@@ -64,7 +64,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
 
             # Take the policy grad step
             with util.Timer() as t_step:
-                params0_P = self.policy.get_params(sess)
+                params0_P = self.policy.get_params(sess=sess)
                 step_print_fields = self.step_func(sess, self.policy, trajbatch,
                                                    trajbatch_vals['advantage'])
                 self.policy.update_obsnorm(trajbatch.obsfeat.stacked, sess=sess)
@@ -79,7 +79,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             ('tdv_r2', trajbatch_vals['tv_r'], float),
             ('ent', self.policy._compute_actiondist_entropy(trajbatch.adist.stacked).mean(), float
             ),  # entropy of action distribution
-            ('dx', util.maxnorm(params0_P - self.policy.get_params(sess)), float
+            ('dx', util.maxnorm(params0_P - self.policy.get_params()), float
             )  # max parameter different from last iteration
         ] + base_info_fields + step_print_fields + [
             ('tsamp', t_sample.dt, float),  # Time for sampling
@@ -146,17 +146,17 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
             if blend_freq > 0:
                 assert self.target_policy is not None
                 assert np.isclose(sum(self.weights), 1)
-                params_P_ag = [policy.get_params(sess) for policy in self.policies]
+                params_P_ag = [policy.get_params() for policy in self.policies]
                 weightparams_P = np.sum([w * p for w, p in util.safezip(self.weights, params_P_ag)])
                 if itr == 0:
                     blendparams_P = 0.001 * self.target_policy.get_params(
                         sess) + 0.999 * weightparams_P
                 if itr > 1 and (itr % blend_freq == 0 or itr % self.n_iter):
-                    blendparams_P = self.interp_alpha * self.target_policy.get_params(sess) + (
+                    blendparams_P = self.interp_alpha * self.target_policy.get_params() + (
                         1 - self.interp_alpha) * weightparams_P
-                self.target_policy.set_params(sess, blendparams_P)
+                self.target_policy.set_params(blendparams_P)
                 for policies in self.policies:
-                    policies.set_params(sess, blendparams_P)
+                    policies.set_params(blendparams_P)
 
     def step(self, sess, itr):
         with util.Timer() as t_all:
@@ -187,7 +187,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                 step_print_fields_list = []
                 params0_P_list = []
                 for agid, policy in enumerate(self.policies):
-                    params0_P = policy.get_params(sess)
+                    params0_P = policy.get_params()
                     params0_P_list.append(params0_P)
                     step_print_fields = self.step_func(sess, policy, trajbatchlist[agid],
                                                        trajbatch_vals_list[agid]['advantage'])

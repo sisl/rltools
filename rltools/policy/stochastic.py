@@ -115,6 +115,11 @@ class StochasticPolicy(Policy):
             self._assign_all_params = tfutil.unflatten_into_vars(self._flatallparams_PA,
                                                                  self._all_param_vars)
 
+            self.set_params = tfutil.function([self._flatparams_P], [], [self._assign_params])
+            self.get_params = tfutil.function([], self._curr_params_P)
+            self.get_state = tfutil.function([], self._curr_all_params_PA)
+            self.set_state = tfutil.function([self._flatallparams_PA], [],
+                                             [self._assign_all_params])
             # Treats placeholder self._flatparams_p as gradient for descent
             with tf.variable_scope('optimizer'):
                 self._learning_rate = tf.placeholder(tf.float32, name='learning_rate')
@@ -154,11 +159,11 @@ class StochasticPolicy(Policy):
     def _compute_actiondist_entropy(self, actiondist_B_Pa):
         raise NotImplementedError()
 
-    def sample_actions(self, sess, obsfeat_B_Df, deterministic=False):
+    def sample_actions(self, obsfeat_B_Df, deterministic=False, **kwargs):
         """Sample actions conditioned on observations
         (Also returns the params)
         """
-        actiondist_B_Pa = self.compute_action_dist_params(obsfeat_B_Df, sess=sess)
+        actiondist_B_Pa = self.compute_action_dist_params(obsfeat_B_Df, **kwargs)
         return self._sample_from_actiondist(actiondist_B_Pa, deterministic), actiondist_B_Pa
 
     def deterministic_action(self, sess, obsfeat_B_Df):
@@ -170,28 +175,28 @@ class StochasticPolicy(Policy):
 
     # TODO penobj computes
 
-    def set_params(self, sess, params_P):
-        sess.run(self._assign_params, {self._flatparams_P: params_P})
+    # def set_params(self, params_P, **kwargs):
+    #     sess.run(self._assign_params, {self._flatparams_P: params_P})
 
-    def get_params(self, sess):
-        params_P = sess.run(self._curr_params_P)
-        assert params_P.shape == (self._num_params,)
-        return params_P
+    # def get_params(self, sess):
+    #     params_P = sess.run(self._curr_params_P)
+    #     assert params_P.shape == (self._num_params,)
+    #     return params_P
 
-    def get_state(self, sess):
-        state_PA = sess.run(self._curr_all_params_PA)
-        assert state_PA.shape == (self._num_all_params,)
-        return state_PA
+    # def get_state(self, sess):
+    #     state_PA = sess.run(self._curr_all_params_PA)
+    #     assert state_PA.shape == (self._num_all_params,)
+    #     return state_PA
 
-    def set_state(self, sess, state_PA):
-        sess.run(self._assign_all_params, {self._flatallparams_PA: state_PA})
+    # def set_state(self, sess, state_PA):
+    #     sess.run(self._assign_all_params, {self._flatallparams_PA: state_PA})
 
     @contextmanager
-    def try_params(self, sess, params_D):
-        orig_params_D = self.get_params(sess)
-        self.set_params(sess, params_D)
+    def try_params(self, params_D, **kwargs):
+        orig_params_D = self.get_params(**kwargs)
+        self.set_params(params_D, **kwargs)
         yield  # Do what you gotta do
-        self.set_params(sess, orig_params_D)
+        self.set_params(orig_params_D, **kwargs)
 
     def take_descent_step(self, sess, grad_P, learning_rate):
         sess.run(self._take_descent_step, {self._flatparams_P: grad_P,

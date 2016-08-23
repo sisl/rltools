@@ -122,7 +122,7 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
     def wrapper(sess, feed, max_kl, damping, subsample_hvp_frac=.1, grad_stop_tol=1e-6,
                 max_cg_iter=10, enable_bt=True):
         assert isinstance(feed, tuple)
-        params0 = model.get_params(sess)
+        params0 = model.get_params(sess=sess)
         obj0, kl0, objgrad0 = compute_obj_kl_with_grad(*feed, sess=sess)
         gnorm = util.maxnorm(objgrad0)
         try:
@@ -142,16 +142,16 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
         def hvpx0_func(v):
 
             def klgrad_func(p):
-                with model.try_params(sess, p):
-                    klgrad = compute_hvp_helper(*subsamp_feed, sess=sess)
+                with model.try_params(p):
+                    klgrad = compute_hvp_helper(*subsamp_feed)
                 return klgrad
 
             return numdiff_hvp(v, klgrad_func, params0)
 
         # Line search objective
         def obj_and_kl_func(p):
-            with model.try_params(sess, p):
-                obj, kl = compute_obj_kl(*feed, sess=sess)
+            with model.try_params(p):
+                obj, kl = compute_obj_kl(*feed)
             return -obj, kl
 
         params1, num_bt_steps = ngstep(x0=params0, obj0=-obj0, objgrad0=-objgrad0,
@@ -159,7 +159,7 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
                                        max_kl=max_kl, damping=damping, max_cg_iter=max_cg_iter,
                                        enable_bt=enable_bt)
 
-        model.set_params(sess, params1)
+        model.set_params(params1, sess=sess)
         obj1, kl1 = compute_obj_kl(*feed, sess=sess)
         return NGStepInfo(obj0, kl0, obj1, kl1, gnorm, num_bt_steps)
 
