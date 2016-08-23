@@ -47,6 +47,12 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         with util.Timer() as t_all:
             # Sample trajs using current policy
             with util.Timer() as t_sample:
+                if itr == 0:
+                    # extra batch to init std
+                    trajbatch0, _ = self.sampler.sample(sess, itr)
+                    self.policy.update_obsnorm(trajbatch0.obsfeat.stacked, sess=sess)
+                    self.baseline.update_obsnorm(trajbatch0.obsfeat.stacked, sess=sess)
+                    self.sampler.rewnorm.update(trajbatch0.r.stacked[:, None], sess=sess)
                 trajbatch, sample_info_fields = self.sampler.sample(sess, itr)
 
             # Compute baseline
@@ -61,6 +67,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 params0_P = self.policy.get_params(sess)
                 step_print_fields = self.step_func(sess, self.policy, trajbatch,
                                                    trajbatch_vals['advantage'])
+                self.policy.update_obsnorm(trajbatch.obsfeat.stacked, sess=sess)
+                self.sampler.rewnorm.update(trajbatch.r.stacked[:, None], sess=sess)
         # LOG
         self.total_time += t_all.dt
 
