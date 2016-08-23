@@ -73,10 +73,10 @@ class Sampler(object):
         # Compute advantage -- GAE(gamma,lambda) estimator
         v_B_T = v.padded(fill=0.)
         v_B_Tp1 = np.concatenate([v_B_T, np.zeros((B, 1))], axis=1)
-        #assert v_B_Tp1.shape == (B, maxT + 1)
+        assert v_B_Tp1.shape == (B, maxT + 1)
         delta_B_T = rewards_B_T + discount * v_B_Tp1[:, 1:] - v_B_Tp1[:, :-1]
         adv_B_T = rltools.util.discount(delta_B_T, discount * gae_lambda)
-        #assert adv_B_T.shape == (B, maxT)
+        assert adv_B_T.shape == (B, maxT)
         adv = RaggedArray([adv_B_T[i, :l] for i, l in enumerate(trajlens)])
         assert np.allclose(adv.padded(fill=0), adv_B_T)
 

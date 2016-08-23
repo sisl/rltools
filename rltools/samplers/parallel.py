@@ -59,11 +59,15 @@ class ThreadedSampler(Sampler):
 class ParallelSampler(Sampler):
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False, enable_rewnorm=True, n_workers=4,
-                 mode='centralized', discard_extra=False):
-        super(ParallelSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                              n_timesteps_min, n_timesteps_max, adaptive,
-                                              enable_rewnorm)
+                 n_timesteps_max, adaptive=False, n_workers=4, mode='centralized',
+                 discard_extra=False):
+        super(ParallelSampler, self).__init__(algo,
+                                              n_timesteps,
+                                              max_traj_len,
+                                              timestep_rate,
+                                              n_timesteps_min,
+                                              n_timesteps_max,
+                                              adaptive,)
         self.n_workers = n_workers
         self.mode = mode
         self.discard_extra = discard_extra

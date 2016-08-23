@@ -122,7 +122,8 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
     def wrapper(feed, max_kl, damping, subsample_hvp_frac=.1, grad_stop_tol=1e-6, max_cg_iter=10,
                 enable_bt=True):
         assert isinstance(feed, tuple)
-
+        import ipdb
+        ipdb.set_trace()
         params0 = model.get_params()
         obj0, kl0, objgrad0 = compute_obj_kl_with_grad(*feed)
         gnorm = util.maxnorm(objgrad0)
