@@ -34,11 +34,7 @@ class StochasticPolicy(Policy):
             action_shape = [batch_size, action_dim]
             # Action distribution for current policy
             self._obsfeat = tf.placeholder(tf.float32, obsfeat_shape, name='obsfeat')
-            with tf.variable_scope('obsnorm'):
-                self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
-            self._normalized_obsfeat = self.obsnorm.standardize_expr(self._obsfeat)
-
+            self._normalized_obsfeat = self._obsfeat
             self._actiondist = self._make_actiondist_ops(self._normalized_obsfeat)
             self._input_action = tf.placeholder(action_type, action_shape,
                                                 name='input_actions')  # Action dims FIXME type
@@ -129,10 +125,6 @@ class StochasticPolicy(Policy):
     @property
     def distribution(self):
         raise NotImplementedError()
-
-    def update_obsnorm(self, obs_B_Do, sess):
-        """Update norms using moving avg"""
-        self.obsnorm.update(obs_B_Do, sess=sess)
 
     def _make_actiondist_ops(self, obsfeat_B_Df):
         """Ops to compute action distribution parameters

@@ -26,9 +26,6 @@ class MLPBaseline(Baseline, nn.Model):
         self.time_scale = time_scale
 
         with tf.variable_scope(varscope_name) as self.varscope:
-            with tf.variable_scope('obsnorm'):
-                self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
             with tf.variable_scope('vnorm'):
                 self.vnorm = (nn.Standardizer if enable_vnorm else nn.NoOpStandardizer)(1)
 
@@ -84,10 +81,6 @@ class MLPBaseline(Baseline, nn.Model):
             assert out_layer.output_shape == (1,)
         return out_layer.output[:, 0]
 
-    def update_obsnorm(self, obs_B_Do, sess):
-        """Update norms using moving avg"""
-        self.obsnorm.update(obs_B_Do, sess=sess)
-
     def get_params(self, sess):
         params_P = sess.run(self._curr_params_P)
         assert params_P.shape == (self._num_params,)
@@ -111,13 +104,11 @@ class MLPBaseline(Baseline, nn.Model):
         t_B = trajs.time.stacked
 
         # Update norm
-        self.obsnorm.update(obs_B_Do, sess=sess)
         self.vnorm.update(qval_B[:, None], sess=sess)
 
         # Take step
-        sobs_B_Do = self.obsnorm.standardize(obs_B_Do, sess=sess)
         sqval_B = self.vnorm.standardize(qval_B[:, None], sess=sess)[:, 0]
-        feed = (sobs_B_Do, t_B, sqval_B, self._predict_raw(sess, sobs_B_Do, t_B))
+        feed = (obs_B_Do, t_B, sqval_B, self._predict_raw(sess, obs_B_Do, t_B))
         step_info = self._ngstep(sess, feed, max_kl=self.max_kl, damping=self.damping,
                                  subsample_hvp_frac=self.subsample_hvp_frac,
                                  grad_stop_tol=self.grad_stop_tol)
@@ -131,8 +122,7 @@ class MLPBaseline(Baseline, nn.Model):
     def predict(self, sess, trajs):
         obs_B_Do = trajs.obs.stacked
         t_B = trajs.time.stacked
-        sobs_B_Do = self.obsnorm.standardize(obs_B_Do, sess=sess)
         pred_B = self.vnorm.unstandardize(
-            self._predict_raw(sess, sobs_B_Do, t_B)[:, None], sess=sess)[:, 0]
+            self._predict_raw(sess, obs_B_Do, t_B)[:, None], sess=sess)[:, 0]
         assert pred_B.shape == t_B.shape
         return pred_B
