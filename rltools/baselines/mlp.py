@@ -97,9 +97,9 @@ class MLPBaseline(Baseline, nn.Model):
                                            self.target_val_B: target_val_B,
                                            self.old_val_B: old_val_B})[0]
 
-    def update_obsnorm(self, sess, obs_B_Do):
+    def update_obsnorm(self, obs_B_Do, sess):
         """Update norms using moving avg"""
-        self.obsnorm.update(sess, obs_B_Do)
+        self.obsnorm.update(obs_B_Do, sess=sess)
 
     def get_params(self, sess):
         params_P = sess.run(self._curr_params_P)
@@ -124,12 +124,12 @@ class MLPBaseline(Baseline, nn.Model):
         t_B = trajs.time.stacked
 
         # Update norm
-        self.obsnorm.update(sess, obs_B_Do)
-        self.vnorm.update(sess, qval_B[:, None])
+        self.obsnorm.update(obs_B_Do, sess=sess)
+        self.vnorm.update(qval_B[:, None], sess=sess)
 
         # Take step
-        sobs_B_Do = self.obsnorm.standardize(sess, obs_B_Do)
-        sqval_B = self.vnorm.standardize(sess, qval_B[:, None])[:, 0]
+        sobs_B_Do = self.obsnorm.standardize(obs_B_Do, sess=sess)
+        sqval_B = self.vnorm.standardize(qval_B[:, None], sess=sess)[:, 0]
         feed = (sobs_B_Do, t_B, sqval_B, self._predict_raw(sess, sobs_B_Do, t_B))
         step_info = self._ngstep(sess, feed, max_kl=self.max_kl, damping=self.damping,
                                  subsample_hvp_frac=self.subsample_hvp_frac,
@@ -144,8 +144,8 @@ class MLPBaseline(Baseline, nn.Model):
     def predict(self, sess, trajs):
         obs_B_Do = trajs.obs.stacked
         t_B = trajs.time.stacked
-        sobs_B_Do = self.obsnorm.standardize(sess, obs_B_Do)
-        pred_B = self.vnorm.unstandardize(sess, self._predict_raw(sess, sobs_B_Do,
-                                                                  t_B)[:, None])[:, 0]
+        sobs_B_Do = self.obsnorm.standardize(obs_B_Do, sess=sess)
+        pred_B = self.vnorm.unstandardize(
+            self._predict_raw(sess, sobs_B_Do, t_B)[:, None], sess=sess)[:, 0]
         assert pred_B.shape == t_B.shape
         return pred_B

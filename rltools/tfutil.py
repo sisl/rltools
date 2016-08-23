@@ -86,3 +86,32 @@ def subsample_feed(feed, frac):
     assert all(a.shape[0] == l for a in feed), 'All feed entries must have the same length'
     subsamp_inds = np.random.choice(l, size=int(frac * l))
     return tuple(a[subsamp_inds, ...] for a in feed)
+
+
+def function(inputs, outputs, updates=None):
+    if isinstance(outputs, list):
+        return TFFunction(inputs, outputs, updates)
+    elif isinstance(outputs, dict):
+        f = TFFunction(inputs, outputs.values(), updates)
+        return lambda *inputs, **kwargs: dict(zip(outputs.keys(), f(*inputs, **kwargs)))
+    else:
+        f = TFFunction(inputs, [outputs], updates)
+        return lambda *inputs, **kwargs: f(*inputs, **kwargs)[0]
+
+
+class TFFunction(object):
+
+    def __init__(self, inputs, outputs, updates):
+        self._inputs = inputs
+        self._outputs = outputs
+        self._updates = [] if updates is None else updates
+
+    def __call__(self, *inputs_, **kwargs):
+        assert len(inputs_) == len(self._inputs)
+        feed_dict = dict(zip(self._inputs, inputs_))
+        sess = kwargs.pop('sess', tf.get_default_session())
+        results = sess.run(self._outputs + self._updates, feed_dict=feed_dict)
+        if any(result is not None and np.isnan(result).any() for result in results):
+            raise RuntimeError("NaN encountered")
+
+        return results[:len(self._outputs)]

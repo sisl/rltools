@@ -14,8 +14,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                  store_paths=False, whole_paths=True, sampler_cls=None,
                  sampler_args=dict(max_traj_len=200, n_timesteps=6400, adaptive=False,
                                    n_timesteps_min=1600, n_timesteps_max=12800, timestep_rate=40,
-                                   enable_rewnorm=True), 
-                 update_curriculum=False, **kwargs):
+                                   enable_rewnorm=True), update_curriculum=False, **kwargs):
         self.env = env
         self.policy = policy
         self.baseline = baseline
@@ -41,7 +40,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
             log.write(iter_info, print_header=itr % 20 == 0)
             if itr % save_freq == 0 or itr % self.n_iter:
                 log.write_snapshot(sess, self.policy, itr)
-            if self.update_curriculum: self.env.update_curriculum(itr)
+            if self.update_curriculum:
+                self.env.update_curriculum(itr)
 
     def step(self, sess, itr):
         with util.Timer() as t_all:
@@ -50,9 +50,9 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 if itr == 0:
                     # extra batch to init std
                     trajbatch0, _ = self.sampler.sample(sess, itr)
-                    self.policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                    self.baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                    self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
+                    self.policy.update_obsnorm(trajbatch0.obsfeat.stacked, sess=sess)
+                    self.baseline.update_obsnorm(trajbatch0.obsfeat.stacked, sess=sess)
+                    self.sampler.rewnorm.update(trajbatch0.r.stacked[:, None], sess=sess)
                 trajbatch, sample_info_fields = self.sampler.sample(sess, itr)
 
             # Compute baseline
@@ -67,8 +67,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 params0_P = self.policy.get_params(sess)
                 step_print_fields = self.step_func(sess, self.policy, trajbatch,
                                                    trajbatch_vals['advantage'])
-                self.policy.update_obsnorm(sess, trajbatch.obsfeat.stacked)
-                self.sampler.rewnorm.update(sess, trajbatch.r.stacked[:, None])
+                self.policy.update_obsnorm(trajbatch.obsfeat.stacked, sess=sess)
+                self.sampler.rewnorm.update(trajbatch.r.stacked[:, None], sess=sess)
         # LOG
         self.total_time += t_all.dt
 

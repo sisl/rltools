@@ -37,7 +37,8 @@ class Sampler(object):
         trajlens = [len(traj) for traj in trajbatch]
         maxT = max(trajlens)
 
-        rewards_B_T = self.rewnorm.standardize(sess, trajbatch.r.padded(fill=0.), centered=False)
+        rewards_B_T = self.rewnorm.standardize(
+            trajbatch.r.padded(fill=0.), centered=False, sess=sess)
         assert not self.algo.discount is None
         qvals_zfilled_B_T = rltools.util.discount(rewards_B_T, discount)
         assert qvals_zfilled_B_T.shape == (B, maxT)

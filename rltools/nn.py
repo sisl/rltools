@@ -5,7 +5,7 @@ import h5py
 import numpy as np
 import tensorflow as tf
 
-from rltools import util
+from rltools import util, tfutil
 
 
 class Model(object):
@@ -139,6 +139,7 @@ class FlattenLayer(Layer):
     def output_shape(self):
         return self._output_shape
 
+
 class AffineLayer(Layer):
 
     def __init__(self, input_B_Di, input_shape, output_shape, Winitializer, binitializer):
@@ -212,11 +213,14 @@ class ConvLayer(Layer):
     def output_shape(self):
         return self._output_shape
 
+    @property
+    def output(self):
+        return self.output_B_Oh_Ow_Co
 
     @property
-    def output(self): return self.output_B_Oh_Ow_Co
-    @property
-    def output_shape(self): return self._output_shape
+    def output_shape(self):
+        return self._output_shape
+
 
 def _check_keys(d, keys, optional):
     s = set(d.keys())
@@ -300,7 +304,7 @@ class NoOpStandardizer(object):
     def __init__(self, dim, eps=1e-6):
         pass
 
-    def update(self, points_N_D):
+    def update(self, points_N_D, **kwargs):
         pass
 
     def standardize_expr(self, x_B_D):
@@ -309,10 +313,10 @@ class NoOpStandardizer(object):
     def unstandardize_expr(self, y_B_D):
         return y_B_D
 
-    def standardize(self, x_B_D):
+    def standardize(self, x_B_D, **kwargs):
         return x_B_D
 
-    def unstandardize(self, y_B_D):
+    def unstandardize(self, y_B_D, **kwargs):
         return y_B_D
 
 
@@ -346,29 +350,22 @@ class Standardizer(Model):
                                                trainable=False)
             self._stdev_1_D = tf.sqrt(self._meansq_1_D - tf.square(self._mean_1_D) + self._eps)
 
-    def get_mean(self, sess):
-        return sess.run(self._mean_1_D)
+        self.get_mean = tfutil.function([], self._mean_1_D)
+        self.get_meansq = tfutil.function([], self._meansq_1_D)
+        self.get_stdev = tfutil.function([], self._stdev_1_D)
+        self.get_count = tfutil.function([], self._count)
 
-    def get_meansq(self, sess):
-        return sess.run(self._meansq_1_D)
-
-    def get_stdev(self, sess):
-        # TODO: return with shape (1,D)
-        return sess.run(self._stdev_1_D)
-
-    def get_count(self, sess):
-        return sess.run(self._count)
-
-    def update(self, sess, points_N_D):
+    def update(self, points_N_D, **kwargs):
         assert points_N_D.ndim >= 2 and points_N_D.shape[1:] == self._shape
         num = points_N_D.shape[0]
-        count = self.get_count(sess)
+        count = self.get_count(**kwargs)
         a = count / (count + num)
-        mean_op = self._mean_1_D.assign(a * self.get_mean(sess) + (1. - a) * points_N_D.mean(
+        mean_op = self._mean_1_D.assign(a * self.get_mean(**kwargs) + (1. - a) * points_N_D.mean(
             axis=0, keepdims=True))
-        meansq_op = self._meansq_1_D.assign(a * self.get_meansq(sess) + (1. - a) * (
+        meansq_op = self._meansq_1_D.assign(a * self.get_meansq(**kwargs) + (1. - a) * (
             points_N_D**2).mean(axis=0, keepdims=True))
         count_op = self._count.assign(count + num)
+        sess = kwargs.pop('sess', tf.get_default_session())
         sess.run([mean_op, meansq_op, count_op])
 
     def standardize_expr(self, x_B_D):
@@ -377,16 +374,16 @@ class Standardizer(Model):
     def unstandardize_expr(self, y_B_D):
         return y_B_D * (self._stdev_1_D + self._eps) + self._mean_1_D
 
-    def standardize(self, sess, x_B_D, centered=True):
+    def standardize(self, x_B_D, centered=True, **kwargs):
         assert x_B_D.ndim >= 2
         mu = 0.
         if centered:
-            mu = self.get_mean(sess)
-        return (x_B_D - mu) / (self.get_stdev(sess) + self._eps)
+            mu = self.get_mean(**kwargs)
+        return (x_B_D - mu) / (self.get_stdev(**kwargs) + self._eps)
 
-    def unstandardize(self, sess, y_B_D, centered=True):
+    def unstandardize(self, y_B_D, centered=True, **kwargs):
         assert y_B_D.ndim >= 2
         mu = 0.
         if centered:
-            mu = self.get_mean(sess)
-        return y_B_D * (self.get_stdev(sess) + self._eps) + mu
+            mu = self.get_mean(**kwargs)
+        return y_B_D * (self.get_stdev(**kwargs) + self._eps) + mu
