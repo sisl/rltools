@@ -65,14 +65,14 @@ class MLPBaseline(Baseline, nn.Model):
 
         self.compute_klgrad = tfutil.function(ins, self._kl_grad_P)
         self.compute_obj_kl = tfutil.function(ins, [self._obj, self._kl])
-        self.compute_obj_kl_with_grad = tfutil.function(ins, [self._obj, self._kl, self._kl_grad_P])
+        self.compute_obj_kl_with_grad = tfutil.function(ins, [self._obj, self._kl, self._objgrad_P])
 
         self._ngstep = optim.make_ngstep_func(
             self, compute_obj_kl=self.compute_obj_kl,
             compute_obj_kl_with_grad=self.compute_obj_kl_with_grad,
             compute_hvp_helper=self.compute_klgrad)
 
-        self.set_params = tfutil.function([self._flatparams_P], [], self._assign_params)
+        self.set_params = tfutil.function([self._flatparams_P], [], [self._assign_params])
         self.get_params = tfutil.function([], self._curr_params_P)
         self._predict_raw = tfutil.function([self._obsfeat_B_Df, self._t_B], self._val_B)
 

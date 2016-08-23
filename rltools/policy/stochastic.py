@@ -162,7 +162,7 @@ class StochasticPolicy(Policy):
         self.compute_klgrad = tfutil.function(ins, self._kl_grad_P)
         self.compute_reinfobj_kl = tfutil.function(ins, [self._reinfobj, self._kl])
         self.compute_reinfobj_kl_with_grad = tfutil.function(
-            ins, [self._reinfobj, self._kl, self._kl_grad_P])
+            ins, [self._reinfobj, self._kl, self._reinfobj_grad_P])
 
         self._ngstep = optim.make_ngstep_func(
             self, compute_obj_kl=self.compute_reinfobj_kl,

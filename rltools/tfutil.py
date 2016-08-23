@@ -93,7 +93,7 @@ def unflatten_into_vars(flatparams_P, param_vars, name=None):
 
 def subsample_feed(feed, frac):
     assert isinstance(feed, tuple) and len(feed) >= 1
-    assert isinstance(frac, float) and 0. < frac <= 1.
+    assert isinstance(frac, float) and 0. < frac <= 1., frac
     l = feed[0].shape[0]
     assert all(a.shape[0] == l for a in feed), 'All feed entries must have the same length'
     subsamp_inds = np.random.choice(l, size=int(frac * l))
