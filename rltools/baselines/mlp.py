@@ -33,38 +33,43 @@ class MLPBaseline(Baseline, nn.Model):
                 self.vnorm = (nn.Standardizer if enable_vnorm else nn.NoOpStandardizer)(1)
 
             batch_size = None
-            self.obsfeat_B_Df = tf.placeholder(tf.float32,
-                                               list((batch_size,) + self.obsfeat_space.shape),
-                                               name='obsfeat_B_Df')  # FIXME shape
-            self.t_B_1 = tf.placeholder(tf.float32, [batch_size, 1], name='t_B')
-            scaled_t_B_1 = self.t_B_1 * self.time_scale
-            self.val_B = self._make_val_op(self.obsfeat_B_Df, scaled_t_B_1)
+            self._obsfeat_B_Df = tf.placeholder(tf.float32,
+                                                list((batch_size,) + self.obsfeat_space.shape),
+                                                name='obsfeat_B_Df')  # FIXME shape
+            self._t_B = tf.placeholder(tf.float32, [batch_size], name='t_B')
+            self._t_B_1 = tf.expand_dims(self._t_B, 1)
+            scaled_t_B_1 = self._t_B_1 * self.time_scale
+            self._val_B = self._make_val_op(self._obsfeat_B_Df, scaled_t_B_1)
 
         # Only code above has trainable vars
-        self.param_vars = self.get_variables(trainable=True)
+        self._param_vars = self.get_variables(trainable=True)
         self._num_params = self.get_num_params(trainable=True)
-        self._curr_params_P = tfutil.flatcat(self.param_vars)
+        self._curr_params_P = tfutil.flatcat(self._param_vars)
 
         # Squared loss for fitting the value function
-        self.target_val_B = tf.placeholder(tf.float32, [batch_size], name='target_val_B')
-        self.obj = -tf.reduce_mean(tf.square(self.val_B - self.target_val_B))
-        self.objgrad_P = tfutil.flatcat(tf.gradients(self.obj, self.param_vars))
+        self._target_val_B = tf.placeholder(tf.float32, [batch_size], name='target_val_B')
+        self._obj = -tf.reduce_mean(tf.square(self._val_B - self._target_val_B))
+        self._objgrad_P = tfutil.flatcat(tf.gradients(self._obj, self._param_vars))
 
         # KL divergence (as Gaussian) and its gradient
-        self.old_val_B = tf.placeholder(tf.float32, [batch_size], name='old_val_B')
-        self.kl = tf.reduce_mean(tf.square(self.old_val_B - self.val_B))
+        self._old_val_B = tf.placeholder(tf.float32, [batch_size], name='old_val_B')
+        self._kl = tf.reduce_mean(tf.square(self._old_val_B - self._val_B))
 
         # KL gradient
-        self.kl_grad_P = tfutil.flatcat(tf.gradients(self.kl, self.param_vars))
+        self._kl_grad_P = tfutil.flatcat(tf.gradients(self._kl, self._param_vars))
 
         # Writing params
         self._flatparams_P = tf.placeholder(tf.float32, [self._num_params], name='flatparams_P')
-        self._assign_params = tfutil.unflatten_into_vars(self._flatparams_P, self.param_vars)
+        self._assign_params = tfutil.unflatten_into_vars(self._flatparams_P, self._param_vars)
 
-        self._ngstep = optim.make_ngstep_func(
-            self, compute_obj_kl=self.compute_obj_kl,
-            compute_obj_kl_with_grad=self.compute_obj_kl_with_grad,
-            compute_hvp_helper=self.compute_klgrad)
+        ins = [self._obsfeat_B_Df, self._t_B, self._target_val_B, self._old_val_B]
+        compute_klgrad = tfutil.function(ins, self._kl_grad_P)
+        compute_obj_kl = tfutil.function(ins, [self._obj, self._kl])
+        compute_obj_kl_with_grad = tfutil.function(ins, [self._obj, self._kl, self._objgrad_P])
+
+        self._ngstep = optim.make_ngstep_func(self, compute_obj_kl=compute_obj_kl,
+                                              compute_obj_kl_with_grad=compute_obj_kl_with_grad,
+                                              compute_hvp_helper=compute_klgrad)
 
     def _make_val_op(self, obsfeat_B_Df, scaled_t_B_1):
         with tf.variable_scope('flat'):
@@ -78,24 +83,6 @@ class MLPBaseline(Baseline, nn.Model):
                                        Winitializer=tf.zeros_initializer, binitializer=None)
             assert out_layer.output_shape == (1,)
         return out_layer.output[:, 0]
-
-    def compute_obj_kl(self, sess, obsfeat_B_Df, t_B, target_val_B, old_val_B):
-        return sess.run([self.obj, self.kl], {self.obsfeat_B_Df: obsfeat_B_Df,
-                                              self.t_B_1: t_B[:, None],
-                                              self.target_val_B: target_val_B,
-                                              self.old_val_B: old_val_B})
-
-    def compute_obj_kl_with_grad(self, sess, obsfeat_B_Df, t_B, target_val_B, old_val_B):
-        return sess.run([self.obj, self.kl, self.objgrad_P], {self.obsfeat_B_Df: obsfeat_B_Df,
-                                                              self.t_B_1: t_B[:, None],
-                                                              self.target_val_B: target_val_B,
-                                                              self.old_val_B: old_val_B})
-
-    def compute_klgrad(self, sess, obsfeat_B_Df, t_B, target_val_B, old_val_B):
-        return sess.run([self.kl_grad_P], {self.obsfeat_B_Df: obsfeat_B_Df,
-                                           self.t_B_1: t_B[:, None],
-                                           self.target_val_B: target_val_B,
-                                           self.old_val_B: old_val_B})[0]
 
     def update_obsnorm(self, obs_B_Do, sess):
         """Update norms using moving avg"""
@@ -117,7 +104,7 @@ class MLPBaseline(Baseline, nn.Model):
         self.set_params(sess, orig_params_P)
 
     def _predict_raw(self, sess, obsfeat_B_Df, t_B):
-        return sess.run(self.val_B, {self.obsfeat_B_Df: obsfeat_B_Df, self.t_B_1: t_B[:, None]})
+        return sess.run(self._val_B, {self._obsfeat_B_Df: obsfeat_B_Df, self._t_B: t_B})
 
     def fit(self, sess, trajs, qval_B):
         obs_B_Do = trajs.obs.stacked

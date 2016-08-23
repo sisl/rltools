@@ -122,9 +122,8 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
     def wrapper(sess, feed, max_kl, damping, subsample_hvp_frac=.1, grad_stop_tol=1e-6,
                 max_cg_iter=10, enable_bt=True):
         assert isinstance(feed, tuple)
-
         params0 = model.get_params(sess)
-        obj0, kl0, objgrad0 = compute_obj_kl_with_grad(sess, *feed)
+        obj0, kl0, objgrad0 = compute_obj_kl_with_grad(*feed, sess=sess)
         gnorm = util.maxnorm(objgrad0)
         assert np.allclose(kl0, 0., atol=1e-6), 'Initial KL divergence is %.7f, but should be 0' % (
             kl0)
@@ -141,7 +140,7 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
 
             def klgrad_func(p):
                 with model.try_params(sess, p):
-                    klgrad = compute_hvp_helper(sess, *subsamp_feed)
+                    klgrad = compute_hvp_helper(*subsamp_feed, sess=sess)
                 return klgrad
 
             return numdiff_hvp(v, klgrad_func, params0)
@@ -149,7 +148,7 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
         # Line search objective
         def obj_and_kl_func(p):
             with model.try_params(sess, p):
-                obj, kl = compute_obj_kl(sess, *feed)
+                obj, kl = compute_obj_kl(*feed, sess=sess)
             return -obj, kl
 
         params1, num_bt_steps = ngstep(x0=params0, obj0=-obj0, objgrad0=-objgrad0,
@@ -158,7 +157,7 @@ def make_ngstep_func(model, compute_obj_kl, compute_obj_kl_with_grad, compute_hv
                                        enable_bt=enable_bt)
 
         model.set_params(sess, params1)
-        obj1, kl1 = compute_obj_kl(sess, *feed)
+        obj1, kl1 = compute_obj_kl(*feed, sess=sess)
         return NGStepInfo(obj0, kl0, obj1, kl1, gnorm, num_bt_steps)
 
     return wrapper

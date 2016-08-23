@@ -30,43 +30,40 @@ class StochasticPolicy(Policy):
             else:
                 raise NotImplementedError()
 
+            obsfeat_shape = list((batch_size,) + self.obsfeat_space.shape)
+            action_shape = [batch_size, action_dim]
             # Action distribution for current policy
-            self._obsfeat_B_Df = tf.placeholder(
-                tf.float32, list((batch_size,) + self.obsfeat_space.shape),
-                name='obsfeat_B_Df')  # Df = feature dimensions FIXME shape
+            self._obsfeat = tf.placeholder(tf.float32, obsfeat_shape, name='obsfeat')
             with tf.variable_scope('obsnorm'):
                 self.obsnorm = (nn.Standardizer if enable_obsnorm else
                                 nn.NoOpStandardizer)(self.obsfeat_space.shape)
-            self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
+            self._normalized_obsfeat = self.obsnorm.standardize_expr(self._obsfeat)
 
-            self._actiondist_B_Pa = self._make_actiondist_ops(
-                self._normalized_obsfeat_B_Df)  # Pa = action distribution params
-            self._input_action_B_Da = tf.placeholder(
-                action_type, [batch_size, action_dim],
-                name='input_actions_B_Da')  # Action dims FIXME type
+            self._actiondist = self._make_actiondist_ops(self._normalized_obsfeat)
+            self._input_action = tf.placeholder(action_type, action_shape,
+                                                name='input_actions')  # Action dims FIXME type
 
-            self._logprobs_B = self._make_actiondist_logprobs_ops(self._actiondist_B_Pa,
-                                                                  self._input_action_B_Da)
+            self._logprobs = self._make_actiondist_logprobs_ops(self._actiondist,
+                                                                self._input_action)
 
             # proposal distribution from old policy
-            self._proposal_actiondist_B_Pa = tf.placeholder(tf.float32,
-                                                            [batch_size, num_actiondist_params],
-                                                            name='proposal_actiondist_B_Pa')
-            self._proposal_logprobs_B = self._make_actiondist_logprobs_ops(
-                self._proposal_actiondist_B_Pa, self._input_action_B_Da)
+            self._proposal_actiondist = tf.placeholder(tf.float32,
+                                                       [batch_size, num_actiondist_params],
+                                                       name='proposal_actiondist')
+            self._proposal_logprobs = self._make_actiondist_logprobs_ops(self._proposal_actiondist,
+                                                                         self._input_action)
 
             # Advantage
-            self._advantage_B = tf.placeholder(tf.float32, [batch_size], name='advantage_B')
+            self._advantage = tf.placeholder(tf.float32, [batch_size], name='advantage')
 
             # Plain pg objective (REINFORCE)
-            impweight_B = tf.exp(self._logprobs_B - self._proposal_logprobs_B)
-            self._reinfobj = tf.reduce_mean(impweight_B * self._advantage_B)  # Surrogate loss
+            impweight = tf.exp(self._logprobs - self._proposal_logprobs)
+            self._reinfobj = tf.reduce_mean(impweight * self._advantage)  # Surrogate loss
 
             # KL
             self._kl_coeff = tf.placeholder(tf.float32, name='kl_cost_coeff')
-            kl_B = self._make_actiondist_kl_ops(self._proposal_actiondist_B_Pa,
-                                                self._actiondist_B_Pa)
-            self._kl = tf.reduce_mean(kl_B, 0)  # Minimize kl divergence
+            kl = self._make_actiondist_kl_ops(self._proposal_actiondist, self._actiondist)
+            self._kl = tf.reduce_mean(kl, 0)  # Minimize kl divergence
 
             # KL Penalty objective for PPO
             self._penobj = self._reinfobj - self._kl_coeff * self._kl
@@ -88,6 +85,20 @@ class StochasticPolicy(Policy):
 
             # KL gradient for TRPO
             self._kl_grad_P = tfutil.flatcat(tf.gradients(self._kl, self._param_vars))
+
+            ins = [self._obsfeat, self._input_action, self._proposal_actiondist, self._advantage]
+
+            self._compute_internal_normalized_obsfeat = tfutil.function([self._obsfeat],
+                                                                        self._normalized_obsfeat)
+            self.compute_action_logprobs = tfutil.function([self._obsfeat, self._input_action],
+                                                           self._logprobs)
+            self.compute_action_dist_params = tfutil.function([self._obsfeat], self._actiondist)
+
+            self.compute_kl_cost = tfutil.function(ins, self._kl)
+            self.compute_klgrad = tfutil.function(ins, self._kl_grad_P)
+            self.compute_reinfobj_kl = tfutil.function(ins, [self._reinfobj, self._kl])
+            self.compute_reinfobj_kl_with_grad = tfutil.function(
+                ins, [self._reinfobj, self._kl, self._reinfobj_grad_P])
 
             self._ngstep = optim.make_ngstep_func(
                 self, compute_obj_kl=self.compute_reinfobj_kl,
@@ -143,56 +154,19 @@ class StochasticPolicy(Policy):
     def _compute_actiondist_entropy(self, actiondist_B_Pa):
         raise NotImplementedError()
 
-    def _compute_internal_normalized_obsfeat(self, sess, obsfeat_B_Df):
-        return sess.run(self._normalized_obsfeat_B_Df, {self._obsfeat_B_Df: obsfeat_B_Df})
-
-    def compute_action_dist_params(self, sess, obsfeat_B_Df):
-        """Actually evaluate action distribution params"""
-        return sess.run(self._actiondist_B_Pa, {self._obsfeat_B_Df: obsfeat_B_Df})
-
     def sample_actions(self, sess, obsfeat_B_Df, deterministic=False):
         """Sample actions conditioned on observations
         (Also returns the params)
         """
-        actiondist_B_Pa = self.compute_action_dist_params(sess, obsfeat_B_Df)
+        actiondist_B_Pa = self.compute_action_dist_params(obsfeat_B_Df, sess=sess)
         return self._sample_from_actiondist(actiondist_B_Pa, deterministic), actiondist_B_Pa
 
     def deterministic_action(self, sess, obsfeat_B_Df):
         """Return the argmax of distribution
         """
-        actiondist_B_Pa = self.compute_action_dist_params(sess, obsfeat_B_Df)
+        actiondist_B_Pa = self.compute_action_dist_params(obsfeat_B_Df, sess=sess)
         a = self._sample_from_actiondist(actiondist_B_Pa, deterministic=True)
         return a[0, 0]
-
-    def compute_action_logprobs(self, sess, obsfeat_B_Df, actions_B_Da):
-        return sess.run(self._logprobs_B, {self._obsfeat_B_Df: obsfeat_B_Df,
-                                           self._input_action_B_Da: actions_B_Da})
-
-    def compute_kl_cost(self, sess, obsfeat_B_Df, proposal_actiondist_B_Pa):
-        return sess.run(self._kl, {self._obsfeat_B_Df: obsfeat_B_Df,
-                                   self._proposal_actiondist_B_Pa: proposal_actiondist_B_Pa})
-
-    def compute_reinfobj_kl(self, sess, obsfeat_B_Df, input_action_B_Da, proposal_actiondist_B_Pa,
-                            advantage_B):
-        return sess.run([self._reinfobj, self._kl],
-                        {self._obsfeat_B_Df: obsfeat_B_Df,
-                         self._input_action_B_Da: input_action_B_Da,
-                         self._proposal_actiondist_B_Pa: proposal_actiondist_B_Pa,
-                         self._advantage_B: advantage_B})
-
-    def compute_reinfobj_kl_with_grad(self, sess, obsfeat_B_Df, input_action_B_Da,
-                                      proposal_actiondist_B_Pa, advantage_B):
-        return sess.run([self._reinfobj, self._kl, self._reinfobj_grad_P],
-                        {self._obsfeat_B_Df: obsfeat_B_Df,
-                         self._input_action_B_Da: input_action_B_Da,
-                         self._proposal_actiondist_B_Pa: proposal_actiondist_B_Pa,
-                         self._advantage_B: advantage_B})
-
-    def compute_klgrad(self, sess, obsfeat_B_Df, input_action_B_Da, proposal_actiondist_B_Pa,
-                       advantage_B):
-        return sess.run(self._kl_grad_P, {self._obsfeat_B_Df: obsfeat_B_Df,
-                                          self._proposal_actiondist_B_Pa: proposal_actiondist_B_Pa
-                                         })  # TODO check if we need more
 
     # TODO penobj computes
 
