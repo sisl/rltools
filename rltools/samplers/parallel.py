@@ -159,7 +159,7 @@ class ParallelSampler(Sampler):
 
         if self.mode == 'concurrent':
             trajbatches = [TrajBatch.FromTrajs(ts) for ts in trajs]
-            self.n_episodes += len(trajbatch[0])
+            self.n_episodes += len(trajbatches[0])
             return (
                 trajbatches,
                 [('ret', np.sum(
