@@ -226,7 +226,7 @@ def _check_keys(d, keys, optional):
     s = set(d.keys())
     if not (s == set(keys) or s == set(keys + optional)):
         raise RuntimeError('Got keys %s, but expected keys %s with optional keys %s' %
-                           (str(s, str(keys), str(optional))))
+                           (str(s), str(keys), str(optional))))
 
 
 def _parse_initializer(layerspec):
