@@ -7,9 +7,9 @@ from rltools import util
 
 
 class Trajectory(object):
-    __slots__ = ('obs_T_Do', 'obsfeat_T_Df', 'adist_T_Pa', 'a_T_Da', 'r_T')
+    __slots__ = ('obs_T_Do', 'obsfeat_T_Df', 'adist_T_Pa', 'a_T_Da', 'r_T', 'info_D')
 
-    def __init__(self, obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T):
+    def __init__(self, obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T, info_D):
         assert (obs_T_Do.ndim > 1 and obsfeat_T_Df.ndim > 1 and adist_T_Pa.ndim > 1 and
                 a_T_Da.ndim > 1 and r_T.ndim == 1 and obs_T_Do.shape[0] == obsfeat_T_Df.shape[0] ==
                 adist_T_Pa.shape[0] == a_T_Da.shape[0] == r_T.shape[0])
@@ -18,6 +18,7 @@ class Trajectory(object):
         self.adist_T_Pa = adist_T_Pa
         self.a_T_Da = a_T_Da
         self.r_T = r_T
+        self.info_D = info_D
 
     def __len__(self):
         return self.obs_T_Do.shape[0]
@@ -96,8 +97,8 @@ class RaggedArray(object):
 
 class TrajBatch(object):
 
-    def __init__(self, trajs, obs, obsfeat, adist, a, r, time):
-        self.trajs, self.obs, self.obsfeat, self.adist, self.a, self.r, self.time = trajs, obs, obsfeat, adist, a, r, time
+    def __init__(self, trajs, obs, obsfeat, adist, a, r, time, info):
+        self.trajs, self.obs, self.obsfeat, self.adist, self.a, self.r, self.time, self.info = trajs, obs, obsfeat, adist, a, r, time, info
 
     @classmethod
     def FromTrajs(cls, trajs):
@@ -108,7 +109,11 @@ class TrajBatch(object):
         a = RaggedArray([t.a_T_Da for t in trajs])
         r = RaggedArray([t.r_T for t in trajs])
         time = RaggedArray([np.arange(len(t), dtype=float) for t in trajs])
-        return cls(trajs, obs, obsfeat, adist, a, r, time)
+        info = {}
+        if trajs[0].info_D:
+            # FIXME: takes sum of info vars (useful for pursuit)
+            info = [(k, [np.sum(t.info_D[k]) for t in trajs]) for k in trajs[0].info_D.keys()]
+        return cls(trajs, obs, obsfeat, adist, a, r, time, info)
 
     def with_replaced_reward(self, new_r):
         new_trajs = [
