@@ -88,7 +88,7 @@ class ParallelSampler(Sampler):
             state_str = [_dumps(policy.get_state()) for policy in self.algo.policies]
         else:
             state_str = _dumps(self.algo.policy.get_state())
-        get_values([proxies.client("set_state", state_str, async=True) for proxies in self.proxies])
+        [proxies.client("set_state", state_str, async=True) for proxies in self.proxies]
 
         self.seed_idx2 = self.seed_idx
         timesteps_sofar = 0
@@ -292,17 +292,6 @@ def _loads(s):
 
 def _dumps(o):
     return cPickle.dumps(o, protocol=-1)
-
-
-def get_values(li):
-    return [maybe_unpickle(el.get()) for el in li]
-
-
-def maybe_unpickle(x):
-    if isinstance(x, str) and x[0] == '\x80':
-        return cPickle.loads(x)
-    else:
-        return x
 
 
 if __name__ == "__main__":
