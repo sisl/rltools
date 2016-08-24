@@ -39,7 +39,8 @@ class MLPBaseline(Baseline, nn.Model):
             self._t_B = tf.placeholder(tf.float32, [batch_size], name='t_B')
             self._t_B_1 = tf.expand_dims(self._t_B, 1)
             scaled_t_B_1 = self._t_B_1 * self.time_scale
-            self._val_B = self._make_val_op(self._obsfeat_B_Df, scaled_t_B_1)
+            self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
+            self._val_B = self._make_val_op(self._normalized_obsfeat_B_Df, scaled_t_B_1)
 
         # Only code above has trainable vars
         self._param_vars = self.get_variables(trainable=True)
