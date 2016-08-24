@@ -35,7 +35,7 @@ class ThreadedSampler(Sampler):
             if itr % self.timestep_rate == 0:
                 self.n_timesteps *= 2
 
-        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(sess, ofeat), mtl, self.algo.policy.action_space)
+        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(ofeat), mtl, self.algo.policy.action_space)
 
         with ThreadPoolExecutor(self.n_workers) as self.executor:
             trajs = self.executor.map(r_func, [self.max_traj_len] * int(self.n_timesteps /

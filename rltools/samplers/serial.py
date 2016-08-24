@@ -64,7 +64,7 @@ class DecSampler(Sampler):
         timesteps_sofar = 0
         while True:
             ag_trajs = decrollout(self.algo.env, self.algo.obsfeat_fn,
-                                  lambda ofeat: self.algo.policy.sample_actions(sess, ofeat),
+                                  lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                   self.max_traj_len, self.algo.policy.action_space)
             trajs.extend(ag_trajs)
             timesteps_sofar += np.sum(map(len, ag_trajs))
