@@ -28,7 +28,7 @@ class LinearFeatureBaseline(Baseline):
 
     def _features(self, sess, trajs):
         obs_B_Do = trajs.obsfeat.stacked
-        sobs_B_Do = self.obsnorm.standardize(sess, obs_B_Do)
+        sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
         return np.concatenate([
             sobs_B_Do, trajs.time.stacked[:, None] / 100., (trajs.time.stacked[:, None] / 100.)**2,
             np.ones((sobs_B_Do.shape[0], 1))
