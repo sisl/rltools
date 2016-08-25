@@ -13,8 +13,8 @@ class LinearFeatureBaseline(Baseline):
         self.w_Df = None
         self._reg_coeff = reg_coeff
         with tf.variable_scope(varscope_name + '_obsnorm'):
-            self.obsnorm = (nn.Standardizer
-                            if enable_obsnorm else nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
+            self.obsnorm = (nn.Standardizer if enable_obsnorm else
+                            nn.NoOpStandardizer)(self.obsfeat_space.shape[0])
 
     def get_params(self, _):
         return self.w_Df
@@ -22,9 +22,9 @@ class LinearFeatureBaseline(Baseline):
     def set_params(self, _, vals):
         self.w_Df = vals
 
-    def update_obsnorm(self, sess, obs_B_Do):
+    def update_obsnorm(self, obs_B_Do, sess):
         """Update norms using moving avg"""
-        self.obsnorm.update(sess, obs_B_Do)
+        self.obsnorm.update(obs_B_Do, sess=sess)
 
     def _features(self, sess, trajs):
         obs_B_Do = trajs.obsfeat.stacked
