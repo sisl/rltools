@@ -141,25 +141,23 @@ def get_lists(nl, na):
 
 
 def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
-    if not isinstance(act_fn, list):
-        act_fn = [act_fn for _ in env.agents]
+    # if not isinstance(act_fn, list):
+    #     act_fn = [act_fn for _ in env.agents]
+    # assert len(act_fn) == len(env.agents)
+    # XXX
+    assert not isinstance(act_fn, list)
 
-    assert len(act_fn) == len(env.agents)
     trajs = []
     old_obs = env.reset()
     obs, obsfeat, actions, actiondists, rewards = get_lists(5, len(env.agents))
 
     for itr in range(max_traj_len):
-        agent_actions = []
+        agent_actions, adist_list = act_fn(np.asarray(old_obs))
         for i, agent_obs in enumerate(old_obs):
-            if agent_obs is None:
-                continue
             obs[i].append(np.expand_dims(agent_obs, 0))
             obsfeat[i].append(obsfeat_fn(obs[i][-1]))
-            a, adist = act_fn[i](obsfeat[i][-1])
-            agent_actions.append(a)
-            actions[i].append(a)
-            actiondists[i].append(adist)
+            actions[i].append(agent_actions[i])
+            actiondists[i].append(adist_list[i])
 
         comp_actions = np.array(agent_actions)
         if isinstance(action_space, spaces.Discrete):
@@ -179,8 +177,8 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
     for agnt in range(len(env.agents)):
         obs_T_Do = np.concatenate(obs[agnt])
         obsfeat_T_Df = np.concatenate(obsfeat[agnt])
-        adist_T_Pa = np.concatenate(actiondists[agnt])
-        a_T_Da = np.concatenate(actions[agnt])
+        adist_T_Pa = np.concatenate(np.expand_dims(np.asarray(actiondists[agnt]), 0))
+        a_T_Da = np.concatenate(np.expand_dims(np.asarray(actions[agnt]), 0))
         r_T = np.asarray(rewards[agnt])
         trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T))
 

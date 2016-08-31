@@ -255,7 +255,10 @@ class RolloutServer(object):
                                    [policy.sample_actions for policy in self.policy],
                                    self.max_traj_len, self.action_space)
         else:
-            self.policy.reset()
+            if self.mode == 'decentralized':
+                self.policy.reset(dones=[True] * len(self.env.agents))
+            else:
+                self.policy.reset()
             traj = self.rollout_fn(self.env, self.obsfeat_fn, self.policy.sample_actions,
                                    self.max_traj_len, self.action_space)
 

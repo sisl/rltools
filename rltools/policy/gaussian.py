@@ -179,7 +179,7 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
     def reset(self, dones=None):
         if dones is None:
             dones = [True]
-            dones = np.asarray(dones)
+        dones = np.asarray(dones)
         if self.prev_actions is None or len(dones) != len(self.prev_actions):
             self.prev_actions = np.zeros((len(dones), self.action_space.shape[0]))
             self.prev_hiddens = np.zeros((len(dones), self.hidden_dim))

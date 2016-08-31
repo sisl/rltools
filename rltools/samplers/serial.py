@@ -63,7 +63,7 @@ class DecSampler(Sampler):
         trajs = []
         timesteps_sofar = 0
         while True:
-            self.algo.policy.reset()
+            self.algo.policy.reset(dones=[True] * len(env.agents))
             ag_trajs = decrollout(self.algo.env, self.algo.obsfeat_fn,
                                   lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                   self.max_traj_len, self.algo.policy.action_space)
