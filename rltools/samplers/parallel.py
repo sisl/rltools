@@ -20,43 +20,6 @@ from six.moves import cPickle
 gevent_log.setLevel(logging.CRITICAL)
 
 
-class ThreadedSampler(Sampler):
-
-    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False, enable_rewnorm=True, n_workers=4):
-        super(ThreadedSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                              n_timesteps_min, n_timesteps_max, adaptive,
-                                              enable_rewnorm)
-
-        self.n_workers = n_workers
-
-    def sample(self, sess, itr):
-        if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
-            if itr % self.timestep_rate == 0:
-                self.n_timesteps *= 2
-
-        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(ofeat), mtl, self.algo.policy.action_space)
-
-        with ThreadPoolExecutor(self.n_workers) as self.executor:
-            trajs = self.executor.map(r_func, [self.max_traj_len] * int(self.n_timesteps /
-                                                                        self.max_traj_len))  # XXX
-
-        if not isinstance(trajs, list):
-            trajs = list(trajs)
-
-        trajbatch = TrajBatch.FromTrajs(trajs)
-        return (trajbatch,
-                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
-                  float),  # average return for batch of traj
-                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
-                  int),  # average traj length
-                 ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
-                 ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
-                 ('ravg', trajbatch.r.stacked.mean(),
-                  int)  # avg reward encountered per time step (probably not that useful)
-                ])
-
-
 class ParallelSampler(Sampler):
 
     def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
