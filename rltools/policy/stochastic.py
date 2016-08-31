@@ -30,8 +30,18 @@ class StochasticPolicy(Policy):
             else:
                 raise NotImplementedError()
 
-            obsfeat_shape = list((batch_size,) + self.obsfeat_space.shape)
-            action_shape = [batch_size, action_dim]
+            if self.recurrent:
+                obsfeat_shape = list((batch_size,
+                                      None,) + self.obsfeat_space.shape)
+                action_shape = [batch_size, None, action_dim]
+                actiondist_shape = [batch_size, None, num_actiondist_params]
+                advantage_shape = [batch_size, None]
+            else:
+                obsfeat_shape = list((batch_size,) + self.obsfeat_space.shape)
+                action_shape = [batch_size, action_dim]
+                actiondist_shape = [batch_size, num_actiondist_params]
+                advantage_shape = [batch_size]
+
             # Action distribution for current policy
             self._obsfeat = tf.placeholder(tf.float32, obsfeat_shape, name='obsfeat')
             with tf.variable_scope('obsnorm'):
@@ -39,7 +49,12 @@ class StochasticPolicy(Policy):
                                 nn.NoOpStandardizer)(self.obsfeat_space.shape)
             self._normalized_obsfeat = self.obsnorm.standardize_expr(self._obsfeat)
 
-            self._actiondist = self._make_actiondist_ops(self._normalized_obsfeat)
+            if self.recurrent:
+                self._actiondist, self._flatinnet, self.compute_step_mean_std, self._hidden_vec = self._make_actiondist_ops(
+                    self._normalized_obsfeat)
+            else:
+                self._actiondist = self._make_actiondist_ops(self._normalized_obsfeat)
+
             self._input_action = tf.placeholder(action_type, action_shape,
                                                 name='input_actions')  # Action dims FIXME type
 
@@ -47,23 +62,34 @@ class StochasticPolicy(Policy):
                                                                 self._input_action)
 
             # proposal distribution from old policy
-            self._proposal_actiondist = tf.placeholder(tf.float32,
-                                                       [batch_size, num_actiondist_params],
+            self._proposal_actiondist = tf.placeholder(tf.float32, actiondist_shape,
                                                        name='proposal_actiondist')
             self._proposal_logprobs = self._make_actiondist_logprobs_ops(self._proposal_actiondist,
                                                                          self._input_action)
 
             # Advantage
-            self._advantage = tf.placeholder(tf.float32, [batch_size], name='advantage')
+            self._advantage = tf.placeholder(tf.float32, advantage_shape, name='advantage')
+
+            if self.recurrent:
+                self._valid = tf.placeholder(tf.float32, shape=[None, None], name="valid")
+            else:
+                self._valid = None
 
             # Plain pg objective (REINFORCE)
             impweight = tf.exp(self._logprobs - self._proposal_logprobs)
-            self._reinfobj = tf.reduce_mean(impweight * self._advantage)  # Surrogate loss
+            if self.recurrent:
+                self._reinfobj = tf.reduce_sum(impweight * self._advantage *
+                                               self._valid) / tf.reduce_sum(self._valid)
+            else:
+                self._reinfobj = tf.reduce_mean(impweight * self._advantage)  # Surrogate loss
 
             # KL
             self._kl_coeff = tf.placeholder(tf.float32, name='kl_cost_coeff')
             kl = self._make_actiondist_kl_ops(self._proposal_actiondist, self._actiondist)
-            self._kl = tf.reduce_mean(kl, 0)  # Minimize kl divergence
+            if self.recurrent:
+                self._kl = tf.reduce_sum(kl * self._valid) / tf.reduce_sum(self._valid)
+            else:
+                self._kl = tf.reduce_mean(kl, 0)  # Minimize kl divergence
 
             # KL Penalty objective for PPO
             self._penobj = self._reinfobj - self._kl_coeff * self._kl
@@ -80,13 +106,17 @@ class StochasticPolicy(Policy):
             self._curr_all_params_PA = tfutil.flatcat(self._all_param_vars)
 
             # Gradients of objective
-            self._reinfobj_grad_P = tfutil.flatcat(tf.gradients(self._reinfobj, self._param_vars))
-            self._penobj_grad_P = tfutil.flatcat(tf.gradients(self._penobj, self._param_vars))
+            self._reinfobj_grad_P = tfutil.flatcat(
+                tfutil.fixedgradients(self._reinfobj, self._param_vars))
+            self._penobj_grad_P = tfutil.flatcat(
+                tfutil.fixedgradients(self._penobj, self._param_vars))
 
             # KL gradient for TRPO
-            self._kl_grad_P = tfutil.flatcat(tf.gradients(self._kl, self._param_vars))
+            self._kl_grad_P = tfutil.flatcat(tfutil.fixedgradients(self._kl, self._param_vars))
 
             ins = [self._obsfeat, self._input_action, self._proposal_actiondist, self._advantage]
+            if self.recurrent:
+                ins.append(self._valid)
 
             self._compute_internal_normalized_obsfeat = tfutil.function([self._obsfeat],
                                                                         self._normalized_obsfeat)

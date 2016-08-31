@@ -23,6 +23,7 @@ class SimpleSampler(Sampler):
         trajs = []
         timesteps_sofar = 0
         while True:
+            self.algo.policy.reset()
             traj = centrollout(self.algo.env, self.algo.obsfeat_fn,
                                lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                self.max_traj_len, self.algo.policy.action_space)
@@ -34,18 +35,17 @@ class SimpleSampler(Sampler):
         trajbatch = TrajBatch.FromTrajs(trajs)
         self.n_episodes += len(trajbatch)
         return (trajbatch,
-                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
-                  float),  # average return for batch of traj
+                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(), float
+                 ),  # average return for batch of traj
                  ('batch', len(trajbatch), int),  # batch size                 
-                 ('n_episodes', self.n_episodes, int), # total number of episodes
-                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
-                  int),  # average traj length
+                 ('n_episodes', self.n_episodes, int),  # total number of episodes
+                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])), int
+                 ),  # average traj length
                  ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
                  ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
-                 ('ravg', trajbatch.r.stacked.mean(),
-                  int)  # avg reward encountered per time step (probably not that useful)
-                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info]
-                )
+                 ('ravg', trajbatch.r.stacked.mean(), int
+                 )  # avg reward encountered per time step (probably not that useful)
+                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info])
 
 
 class DecSampler(Sampler):
@@ -64,6 +64,7 @@ class DecSampler(Sampler):
         trajs = []
         timesteps_sofar = 0
         while True:
+            self.algo.policy.reset(dones=[True] * len(env.agents))
             ag_trajs = decrollout(self.algo.env, self.algo.obsfeat_fn,
                                   lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                   self.max_traj_len, self.algo.policy.action_space)
@@ -74,17 +75,16 @@ class DecSampler(Sampler):
 
         trajbatch = TrajBatch.FromTrajs(trajs)
         return (trajbatch,
-                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
-                  float),  # average return for batch of traj
+                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(), float
+                 ),  # average return for batch of traj
                  ('batch', len(trajbatch), int),  # batch size                 
-                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
-                  int),  # average traj length
+                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])), int
+                 ),  # average traj length
                  ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
                  ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
-                 ('ravg', trajbatch.r.stacked.mean(),
-                  int)  # avg reward encountered per time step (probably not that useful)
-                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info]
-                )
+                 ('ravg', trajbatch.r.stacked.mean(), int
+                 )  # avg reward encountered per time step (probably not that useful)
+                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info])
 
 
 class ImportanceWeightedSampler(SimpleSampler):

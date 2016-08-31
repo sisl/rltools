@@ -168,34 +168,32 @@ class ParallelSampler(Sampler):
                  ('batch', np.sum([len(trajbatch) for trajbatch in trajbatches]), float),
                  ('n_episodes', self.n_episodes, int),  # total number of episodes                 
                  ('avglen',
-                  int(np.mean([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
-                  int),
+                  int(np.mean([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
+                 ),
                  ('maxlen',
-                  int(np.max([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
-                  int),  # max traj length
+                  int(np.max([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
+                 ),  # max traj length
                  ('minlen',
-                  int(np.min([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
-                  int),  # min traj length
+                  int(np.min([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
+                 ),  # min traj length
                  ('ravg', np.mean([trajbatch.r.stacked.mean() for trajbatch in trajbatches]), float)
-                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info]
-                )
+                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info])
         else:
             trajbatch = TrajBatch.FromTrajs(trajs)
             self.n_episodes += len(trajbatch)
             return (
                 trajbatch,
-                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
-                  float),  # average return for batch of traj
+                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(), float
+                 ),  # average return for batch of traj
                  ('batch', len(trajbatch), int),  # batch size
                  ('n_episodes', self.n_episodes, int),  # total number of episodes
-                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
-                  int),  # average traj length
+                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])), int
+                 ),  # average traj length
                  ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
                  ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
-                 ('ravg', trajbatch.r.stacked.mean(),
-                  float)  # avg reward encountered per time step (probably not that useful)
-                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info]
-                )
+                 ('ravg', trajbatch.r.stacked.mean(), float
+                 )  # avg reward encountered per time step (probably not that useful)
+                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info])
 
 
 class RolloutProxy(object):
@@ -254,6 +252,10 @@ class RolloutServer(object):
                 [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
                 self.max_traj_len, self.action_space)
         else:
+            if self.mode == 'decentralized':
+                self.policy.reset(dones=[True] * len(self.env.agents))
+            else:
+                self.policy.reset()
             traj = self.rollout_fn(self.env, self.obsfeat_fn,
                                    lambda ofeat: self.policy.sample_actions(ofeat),
                                    self.max_traj_len, self.action_space)

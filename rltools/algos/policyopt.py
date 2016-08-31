@@ -1,7 +1,7 @@
 from __future__ import absolute_import, print_function
 import numpy as np
 
-from rltools import util
+from rltools import util, trajutil
 from rltools.algos import RLAlgorithm
 from rltools.samplers.serial import SimpleSampler
 from rltools.samplers.parallel import ParallelSampler
@@ -94,12 +94,20 @@ def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg
          enable_bt=True):
 
     def trpo_step(sess, policy, trajbatch, advantages):
-        # standardize advantage
-        advstacked_N = util.standardized(advantages.stacked)
 
-        # Compute objective, KL divergence and gradietns at init point
-        feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked,
-                advstacked_N)
+        if policy.recurrent:
+            # standardize advantage
+            advpadded_N_H = (advantages.padded(fill=0.) - np.mean(advantages.stacked)) / (
+                np.std(advantages.stacked) + 1e-8)
+            valid = trajutil.RaggedArray([np.ones(trajlen) for trajlen in advantages.lengths])
+            feed = (trajbatch.obsfeat.padded(fill=0.), trajbatch.a.padded(fill=0.),
+                    trajbatch.adist.padded(fill=0.), advpadded_N_H, valid.padded(fill=0.))
+        else:
+            # standardize advantage
+            advstacked_N = util.standardized(advantages.stacked)
+            # Compute objective, KL divergence and gradietns at init point
+            feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked,
+                    advstacked_N)
 
         step_info = policy._ngstep(sess, feed, max_kl=max_kl, damping=damping,
                                    subsample_hvp_frac=subsample_hvp_frac,
