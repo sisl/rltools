@@ -158,7 +158,7 @@ def decrollout(env, act_fn, max_traj_len, action_space):
             actiondists[i].append(adist_list[i])
 
         if isinstance(action_space, spaces.Discrete):
-            new_obs, r, done, info = env.step(comp_actions[:, 0, 0])
+            new_obs, r, done, info = env.step(comp_actions[:, 0])
         else:
             new_obs, r, done, info = env.step(comp_actions)
 
