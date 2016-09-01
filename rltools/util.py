@@ -138,6 +138,97 @@ def stack_dict_list(dict_list):
     return ret
 
 
+def evaluate_policy(env, policy, n_trajs, deterministic, max_traj_len, mode, disc, n_workers=4):
+    ok('Sampling {} trajs (max len {}) from policy in {}'.format(n_trajs, max_traj_len, env))
+
+    # Sample
+    from rltools.samplers.parallel import RolloutProxy
+    from six.moves import cPickle
+    import time
+    from gevent import Timeout
+    from rltools.trajutil import TrajBatch
+    proxies = [RolloutProxy(env, policy, max_traj_len, mode, i) for i in range(n_workers)]
+
+    policy_str = cPickle.dumps(policy.get_state(), protocol=-1)
+    for proxy in proxies:
+        proxy.client("set_state", policy_str, async=True)
+
+    seed_idx = 0
+    seed_idx2 = seed_idx
+    worker2job = {}
+
+    def assign_job_to(i_worker, seed):
+        worker2job[i_worker] = (seed, proxies[i_worker].client("sample", seed, async=True))
+        seed += 1
+        return seed
+
+    # Start jobs
+    for i_worker in range(n_workers):
+        seed_idx2 = assign_job_to(i_worker, seed_idx2)
+
+    trajs_so_far = 0
+    seed2traj = {}
+    while True:
+        for i_worker in range(n_workers):
+            try:
+                (seed_idx, future) = worker2job[i_worker]
+                traj_string = future.get(timeout=1e-3)  # XXX
+            except Timeout:
+                pass
+            else:
+                traj = cPickle.loads(traj_string)
+                seed2traj[seed_idx] = traj
+                trajs_so_far += 1
+                if trajs_so_far >= n_trajs:
+                    break
+                else:
+                    seed_idx2 = assign_job_to(i_worker, seed_idx2)
+        if trajs_so_far >= n_trajs:
+            break
+        time.sleep(0.01)
+
+    # Wait until all jobs finish
+    for seed_idx, future in worker2job.values():
+        seed2traj[seed_idx] = cPickle.loads(future.get())
+
+    trajs = []
+
+    for (seed, traj) in seed2traj.items():
+        trajs.append(traj)
+        trajs_so_far += 1
+
+    # Trajs
+    if mode == 'centralized':
+        trajbatch = TrajBatch.FromTrajs(trajs)
+        r_B_T = trajbatch.r.padded(fill=0.)
+        ret = r_B_T.sum(axis=1).mean()
+        discret = discount(r_B_T, disc).mean()
+        info = {tinfo[0]: np.mean(tinfo[1]) for tinfo in trajbatch.info}
+        return dict(ret=ret, disc_ret=discret, **info)
+    elif mode == 'decentralized':
+        agent2trajs = {}
+        for agid in range(len(env.agents)):
+            agent2trajs[agid] = []
+        for envtrajs in trajs:
+            for agid, agtraj in enumerate(envtrajs):
+                agent2trajs[agid].append(agtraj)
+
+        agent2trajbatch = {}
+        rets = []
+        discrets = []
+        infos = []
+        for agent, trajs in agent2trajs.items():
+            agent2trajbatch[agent] = TrajBatch.FromTrajs(trajs)
+            r_B_T = agent2trajbatch[agent].r.padded(fill=0.)
+            rets.append(r_B_T.sum(axis=1).mean())
+            discrets.append(discount(r_B_T, disc).mean())
+            infos.append({tinfo[0]: np.mean(tinfo[1]) for tinfo in agent2trajbatch[agent].info})
+        infos = stack_dict_list(infos)
+        return dict(ret=rets, disc_ret=discrets, **infos)
+    else:
+        raise NotImplementedError()
+
+
 class Color(object):
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'

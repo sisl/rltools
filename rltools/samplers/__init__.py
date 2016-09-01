@@ -231,18 +231,3 @@ def concrollout(env, act_fns, max_traj_len, action_space):
         trajs.append(Trajectory(obs_T_Do, adist_T_Pa, a_T_Da, r_T, traj_info))
 
     return trajs
-
-
-def evaluate(env, action_fn, max_traj_len, n_traj):
-    rs = np.zeros(n_traj)
-    for t in range(n_traj):
-        rtot = 0.0
-        o = env.reset()
-        for itr in range(max_traj_len):
-            a = action_fn(np.expand_dims(o, 0))
-            o2, r, done, _ = env.step(a)  # XXX
-            rtot += r
-            if done:
-                break
-        rs[t] = rtot
-    return rs.mean()
