@@ -13,7 +13,7 @@ import zerorpc
 from gevent import Timeout
 from zerorpc.gevent_zmq import logger as gevent_log
 
-from rltools.samplers import Sampler, decrollout, centrollout
+from rltools.samplers import Sampler, decrollout, centrollout, concrollout
 from rltools.trajutil import TrajBatch, Trajectory
 from six.moves import cPickle
 
@@ -48,7 +48,7 @@ class ParallelSampler(Sampler):
                 self.n_timesteps *= 2
 
         if self.mode == 'concurrent':
-            state_str = [_dumps(policy.get_state()) for policy in self.algo.policies]
+            state_str = _dumps([policy.get_state() for policy in self.algo.policies])
         else:
             state_str = _dumps(self.algo.policy.get_state())
         [proxies.client("set_state", state_str, async=True) for proxies in self.proxies]
@@ -125,10 +125,10 @@ class ParallelSampler(Sampler):
             self.n_episodes += len(trajbatches[0])
             return (
                 trajbatches,
-                [('ret', np.sum(
+                [('ret', np.mean(
                     [trajbatch.r.padded(fill=0.).sum(axis=1).mean() for trajbatch in trajbatches]),
                   float),
-                 ('batch', np.sum([len(trajbatch) for trajbatch in trajbatches]), float),
+                 ('batch', np.mean([len(trajbatch) for trajbatch in trajbatches]), float),
                  ('n_episodes', self.n_episodes, int),  # total number of episodes                 
                  ('avglen',
                   int(np.mean([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
@@ -201,7 +201,7 @@ class RolloutServer(object):
         elif self.mode == 'decentralized':
             self.rollout_fn = decrollout
         elif self.mode == 'concurrent':
-            self.rollout_fn = decrollout
+            self.rollout_fn = concrollout
 
     def sample(self, seed):
         self.env.seed(seed)
@@ -224,7 +224,8 @@ class RolloutServer(object):
 
     def set_state(self, state_str):
         if self.mode == 'concurrent':
-            [policy.set_state(_loads(state_str[agid])) for agid, policy in enumerate(self.policy)]
+            state = _loads(state_str)
+            [policy.set_state(state[agid]) for agid, policy in enumerate(self.policy)]
         else:
             self.policy.set_state(_loads(state_str))
 

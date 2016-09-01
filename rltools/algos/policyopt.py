@@ -123,9 +123,9 @@ def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg
 
 class ConcurrentPolicyOptimizer(RLAlgorithm):
 
-    def __init__(self, env, policies, baselines, step_func, target_policy, weights, interp_alpha,
-                 discount, gae_lambda, n_iter, start_iter=0, sampler_cls=None, sampler_args=None,
-                 **kwargs):
+    def __init__(self, env, policies, baselines, step_func, discount, gae_lambda, n_iter,
+                 start_iter=0, sampler_cls=None, sampler_args=None, target_policy=None,
+                 weights=None, interp_alpha=None, **kwargs):
         self.env = env
         self.policies = policies
         self.baselines = baselines
@@ -142,7 +142,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
         self.sampler = sampler_cls(self, **sampler_args)
         self.total_time = 0.0
 
-    def train(self, sess, log, blend_freq, save_freq):
+    def train(self, sess, log, save_freq, blend_freq=0):
         for itr in range(self.start_iter, self.n_iter):
             iter_info = self.step(sess, itr)
             log.write(iter_info, print_header=itr % 20 == 0)
@@ -173,9 +173,9 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     trajbatchlist0, _ = self.sampler.sample(sess, itr)
                     for policy, baseline, trajbatch0 in util.safezip(self.policies, self.baselines,
                                                                      trajbatchlist0):
-                        policy.update_obsnorm(sess, trajbatch0.obs.stacked)
-                        baseline.update_obsnorm(sess, trajbatch0.obs.stacked)
-                        self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
+                        policy.update_obsnorm(trajbatch0.obs.stacked, sess=sess)
+                        baseline.update_obsnorm(trajbatch0.obs.stacked, sess=sess)
+                        self.sampler.rewnorm.update(trajbatch0.r.stacked[:, None], sess=sess)
                 trajbatchlist, sampler_info_fields = self.sampler.sample(sess, itr)
 
             # Baseline
@@ -199,8 +199,8 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     step_print_fields = self.step_func(sess, policy, trajbatchlist[agid],
                                                        trajbatch_vals_list[agid]['advantage'])
                     step_print_fields_list += step_print_fields
-                    policy.update_obsnorm(sess, trajbatchlist[agid].obs.stacked)
-                    self.sampler.rewnorm.update(sess, trajbatchlist[agid].r.stacked[:, None])
+                    policy.update_obsnorm(trajbatchlist[agid].obs.stacked, sess=sess)
+                    self.sampler.rewnorm.update(trajbatchlist[agid].r.stacked[:, None], sess=sess)
 
         # LOG
         self.total_time += t_all.dt
@@ -213,7 +213,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                 ('ent_{}'.format(agid), self.policies[agid]._compute_actiondist_entropy(
                     trajbatchlist[agid].adist.stacked).mean(), float),
                 ('dx_{}'.format(agid),
-                 util.maxnorm(params0_P_list[agid] - self.policies[agid].get_params(sess)), float)
+                 util.maxnorm(params0_P_list[agid] - self.policies[agid].get_params()), float)
             ]
         fields = [
             ('iter', itr, int)

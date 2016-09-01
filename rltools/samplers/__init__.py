@@ -200,6 +200,58 @@ def decrollout(env, act_fn, max_traj_len, action_space):
     return trajs
 
 
+def concrollout(env, act_fns, max_traj_len, action_space):
+    assert len(act_fns) == len(env.agents)
+
+    trajs = []
+    old_obs = env.reset()
+    obs, actions, actiondists, rewards = get_lists(4, len(env.agents))
+    traj_info = {}
+    for itr in range(max_traj_len):
+        agent_action_adist_list = [act_fn(np.expand_dims(oo, 0))
+                                   for act_fn, oo in zip(act_fns, old_obs)]
+        agent_actions = [part[0] for part in agent_action_adist_list]
+        adist_list = [part[1] for part in agent_action_adist_list]
+        comp_actions = np.array(agent_actions)
+        for i, agent_obs in enumerate(old_obs):
+            obs[i].append(np.expand_dims(agent_obs, 0))
+            actions[i].append(agent_actions[i])
+            actiondists[i].append(adist_list[i])
+
+        if isinstance(action_space, spaces.Discrete):
+            new_obs, r, done, info = env.step(comp_actions[:, 0, 0])
+        else:
+            new_obs, r, done, info = env.step(comp_actions)
+
+        if bool(info):
+            # info is not None or empty dict
+            if not traj_info:
+                traj_info = traj_info.fromkeys(info.keys())
+                for k in traj_info.keys():
+                    traj_info[k] = []
+            for k in info.keys():
+                traj_info[k].append(info[k])
+
+        for i, o in enumerate(old_obs):
+            if o is None:
+                continue
+            rewards[i].append(r[i])
+
+        old_obs = new_obs
+
+        if done:
+            break
+
+    for agnt in range(len(env.agents)):
+        obs_T_Do = np.concatenate(obs[agnt])
+        adist_T_Pa = np.concatenate(np.asarray(actiondists[agnt]))
+        a_T_Da = np.concatenate(np.asarray(actions[agnt]))
+        r_T = np.asarray(rewards[agnt])
+        trajs.append(Trajectory(obs_T_Do, adist_T_Pa, a_T_Da, r_T, traj_info))
+
+    return trajs
+
+
 def evaluate(env, action_fn, max_traj_len, n_traj):
     rs = np.zeros(n_traj)
     for t in xrange(n_traj):
