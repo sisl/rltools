@@ -91,15 +91,14 @@ class Sampler(object):
         raise NotImplementedError()
 
 
-def centrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+def centrollout(env, act_fn, max_traj_len, action_space):
     assert env.reward_mech == 'global'
-    obs, obsfeat, actions, actiondists, rewards = [], [], [], [], []
+    obs, actions, actiondists, rewards = [], [], [], []
     traj_info = {}
     obs.append(np.c_[env.reset()].ravel()[None, ...].copy())
 
     for itr in range(max_traj_len):
-        obsfeat.append(obsfeat_fn(obs[-1]))
-        a, adist = act_fn(obsfeat[-1])
+        a, adist = act_fn(obs[-1])
         actions.append(a)
         actiondists.append(adist)
         if isinstance(action_space, spaces.Discrete):
@@ -131,8 +130,6 @@ def centrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
 
     obs_T_Do = np.concatenate(obs)
     assert obs_T_Do.shape[0] == len(obs), '{} != {}'.format(obs_T_Do.shape, len(obs))
-    obsfeat_T_Df = np.concatenate(obsfeat)
-    assert obsfeat_T_Df.shape[0] == len(obs), '{} != {}'.format(obsfeat_T_Df.shape, len(obs))
     adist_T_Pa = np.concatenate(actiondists)
     assert adist_T_Pa.ndim == 2 and adist_T_Pa.shape[0] == len(obs)
     a_T_Da = np.concatenate(actions)
@@ -140,7 +137,7 @@ def centrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
     r_T = np.asarray(rewards)
     assert r_T.shape == (len(obs),)
 
-    return Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T, traj_info)
+    return Trajectory(obs_T_Do, adist_T_Pa, a_T_Da, r_T, traj_info)
 
 
 def get_lists(nl, na):
@@ -150,7 +147,7 @@ def get_lists(nl, na):
     return l
 
 
-def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
+def decrollout(env, act_fn, max_traj_len, action_space):
     # if not isinstance(act_fn, list):
     #     act_fn = [act_fn for _ in env.agents]
 
@@ -158,7 +155,7 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
     assert not isinstance(act_fn, list)
     trajs = []
     old_obs = env.reset()
-    obs, obsfeat, actions, actiondists, rewards = get_lists(5, len(env.agents))
+    obs, actions, actiondists, rewards = get_lists(4, len(env.agents))
     traj_info = {}
 
     for itr in range(max_traj_len):
@@ -166,7 +163,6 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
         comp_actions = np.array(agent_actions)
         for i, agent_obs in enumerate(old_obs):
             obs[i].append(np.expand_dims(agent_obs, 0))
-            obsfeat[i].append(obsfeat_fn(obs[i][-1]))
             actions[i].append(agent_actions[i])
             actiondists[i].append(adist_list[i])
 
@@ -196,22 +192,21 @@ def decrollout(env, obsfeat_fn, act_fn, max_traj_len, action_space):
 
     for agnt in range(len(env.agents)):
         obs_T_Do = np.concatenate(obs[agnt])
-        obsfeat_T_Df = np.concatenate(obsfeat[agnt])
         adist_T_Pa = np.concatenate(np.expand_dims(np.asarray(actiondists[agnt]), 0))
         a_T_Da = np.concatenate(np.expand_dims(np.asarray(actions[agnt]), 0))
         r_T = np.asarray(rewards[agnt])
-        trajs.append(Trajectory(obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T, traj_info))
+        trajs.append(Trajectory(obs_T_Do, adist_T_Pa, a_T_Da, r_T, traj_info))
 
     return trajs
 
 
-def evaluate(env, obsfeat_fn, action_fn, max_traj_len, n_traj):
+def evaluate(env, action_fn, max_traj_len, n_traj):
     rs = np.zeros(n_traj)
     for t in xrange(n_traj):
         rtot = 0.0
         o = env.reset()
         for itr in range(max_traj_len):
-            a = action_fn(obsfeat_fn(np.expand_dims(o, 0)))
+            a = action_fn(np.expand_dims(o, 0))
             o2, r, done, _ = env.step(a)  # XXX
             rtot += r
             if done:

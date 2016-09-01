@@ -9,9 +9,9 @@ from rltools.samplers.parallel import ParallelSampler
 
 class SamplingPolicyOptimizer(RLAlgorithm):
 
-    def __init__(self, env, policy, baseline, step_func, obsfeat_fn=lambda obs: obs, discount=0.99,
-                 gae_lambda=1, n_iter=500, start_iter=0, center_adv=True, positive_adv=False,
-                 store_paths=False, whole_paths=True, sampler_cls=None,
+    def __init__(self, env, policy, baseline, step_func, discount=0.99, gae_lambda=1, n_iter=500,
+                 start_iter=0, center_adv=True, positive_adv=False, store_paths=False,
+                 whole_paths=True, sampler_cls=None,
                  sampler_args=dict(max_traj_len=200, n_timesteps=6400, adaptive=False,
                                    n_timesteps_min=1600, n_timesteps_max=12800, timestep_rate=40,
                                    enable_rewnorm=True), update_curriculum=False, **kwargs):
@@ -19,7 +19,6 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         self.policy = policy
         self.baseline = baseline
         self.step_func = step_func
-        self.obsfeat_fn = obsfeat_fn
         self.discount = discount
         self.gae_lambda = gae_lambda
         self.n_iter = n_iter
@@ -50,8 +49,8 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 if itr == 0:
                     # extra batch to init std
                     trajbatch0, _ = self.sampler.sample(sess, itr)
-                    self.policy.update_obsnorm(trajbatch0.obsfeat.stacked, sess=sess)
-                    self.baseline.update_obsnorm(trajbatch0.obsfeat.stacked, sess=sess)
+                    self.policy.update_obsnorm(trajbatch0.obs.stacked, sess=sess)
+                    self.baseline.update_obsnorm(trajbatch0.obs.stacked, sess=sess)
                     self.sampler.rewnorm.update(trajbatch0.r.stacked[:, None], sess=sess)
                 trajbatch, sample_info_fields = self.sampler.sample(sess, itr)
 
@@ -67,7 +66,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 params0_P = self.policy.get_params(sess=sess)
                 step_print_fields = self.step_func(sess, self.policy, trajbatch,
                                                    trajbatch_vals['advantage'])
-                self.policy.update_obsnorm(trajbatch.obsfeat.stacked, sess=sess)
+                self.policy.update_obsnorm(trajbatch.obs.stacked, sess=sess)
                 self.sampler.rewnorm.update(trajbatch.r.stacked[:, None], sess=sess)
         # LOG
         self.total_time += t_all.dt
@@ -100,13 +99,13 @@ def TRPO(max_kl, subsample_hvp_frac=.1, damping=1e-2, grad_stop_tol=1e-6, max_cg
             advpadded_N_H = (advantages.padded(fill=0.) - np.mean(advantages.stacked)) / (
                 np.std(advantages.stacked) + 1e-8)
             valid = trajutil.RaggedArray([np.ones(trajlen) for trajlen in advantages.lengths])
-            feed = (trajbatch.obsfeat.padded(fill=0.), trajbatch.a.padded(fill=0.),
+            feed = (trajbatch.obs.padded(fill=0.), trajbatch.a.padded(fill=0.),
                     trajbatch.adist.padded(fill=0.), advpadded_N_H, valid.padded(fill=0.))
         else:
             # standardize advantage
             advstacked_N = util.standardized(advantages.stacked)
             # Compute objective, KL divergence and gradietns at init point
-            feed = (trajbatch.obsfeat.stacked, trajbatch.a.stacked, trajbatch.adist.stacked,
+            feed = (trajbatch.obs.stacked, trajbatch.a.stacked, trajbatch.adist.stacked,
                     advstacked_N)
 
         step_info = policy._ngstep(sess, feed, max_kl=max_kl, damping=damping,
@@ -174,8 +173,8 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     trajbatchlist0, _ = self.sampler.sample(sess, itr)
                     for policy, baseline, trajbatch0 in util.safezip(self.policies, self.baselines,
                                                                      trajbatchlist0):
-                        policy.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
-                        baseline.update_obsnorm(sess, trajbatch0.obsfeat.stacked)
+                        policy.update_obsnorm(sess, trajbatch0.obs.stacked)
+                        baseline.update_obsnorm(sess, trajbatch0.obs.stacked)
                         self.sampler.rewnorm.update(sess, trajbatch0.r.stacked[:, None])
                 trajbatchlist, sampler_info_fields = self.sampler.sample(sess, itr)
 
@@ -200,7 +199,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     step_print_fields = self.step_func(sess, policy, trajbatchlist[agid],
                                                        trajbatch_vals_list[agid]['advantage'])
                     step_print_fields_list += step_print_fields
-                    policy.update_obsnorm(sess, trajbatchlist[agid].obsfeat.stacked)
+                    policy.update_obsnorm(sess, trajbatchlist[agid].obs.stacked)
                     self.sampler.rewnorm.update(sess, trajbatchlist[agid].r.stacked[:, None])
 
         # LOG

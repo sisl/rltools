@@ -11,7 +11,7 @@ class Policy(nn.Model):
         pass
 
     @property
-    def obsfeat_space(self):
+    def observation_space(self):
         return self._observation_space
 
     @property

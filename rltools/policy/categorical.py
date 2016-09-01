@@ -11,22 +11,22 @@ from rltools.util import EzPickle
 
 class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
 
-    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, tblog,
+    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, tblog,
                  varscope_name):
-        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, tblog,
+        EzPickle.__init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, tblog,
                           varscope_name)
         self.hidden_spec = hidden_spec
         self._dist = Categorical(action_space.n)
-        super(CategoricalMLPPolicy, self).__init__(obsfeat_space, action_space, action_space.n,
+        super(CategoricalMLPPolicy, self).__init__(observation_space, action_space, action_space.n,
                                                    enable_obsnorm, tblog, varscope_name)
 
     @property
     def distribution(self):
         return self._dist
 
-    def _make_actiondist_ops(self, obsfeat_B_Df):
+    def _make_actiondist_ops(self, observation_B_Df):
         with tf.variable_scope('flat'):
-            flat = nn.FlattenLayer(obsfeat_B_Df)
+            flat = nn.FlattenLayer(observation_B_Df)
         with tf.variable_scope('hidden'):
             net = nn.FeedforwardNet(flat.output, flat.output_shape, self.hidden_spec)
         with tf.variable_scope('out'):
@@ -57,12 +57,12 @@ class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
 
 class CategoricalGRUPolicy(StochasticPolicy):
 
-    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, tblog,
+    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, tblog,
                  varscope_name, state_include_action=True):
         self.hidden_spec = hidden_spec
         self.state_include_action = state_include_action
         self._dist = RecurrentCategorical(action_space.n)
-        super(CategoricalGRUPolicy, self).__init__(obsfeat_space, action_space, action_space.n,
+        super(CategoricalGRUPolicy, self).__init__(observation_space, action_space, action_space.n,
                                                    enable_obsnorm, tblog, varscope_name)
 
     @property

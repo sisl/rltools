@@ -7,14 +7,12 @@ from rltools import util
 
 
 class Trajectory(object):
-    __slots__ = ('obs_T_Do', 'obsfeat_T_Df', 'adist_T_Pa', 'a_T_Da', 'r_T', 'info_D')
+    __slots__ = ('obs_T_Do', 'adist_T_Pa', 'a_T_Da', 'r_T', 'info_D')
 
-    def __init__(self, obs_T_Do, obsfeat_T_Df, adist_T_Pa, a_T_Da, r_T, info_D):
-        assert (obs_T_Do.ndim > 1 and obsfeat_T_Df.ndim > 1 and adist_T_Pa.ndim > 1 and
-                a_T_Da.ndim > 1 and r_T.ndim == 1 and obs_T_Do.shape[0] == obsfeat_T_Df.shape[0] ==
-                adist_T_Pa.shape[0] == a_T_Da.shape[0] == r_T.shape[0])
+    def __init__(self, obs_T_Do, adist_T_Pa, a_T_Da, r_T, info_D):
+        assert (obs_T_Do.ndim > 1 and adist_T_Pa.ndim > 1 and a_T_Da.ndim > 1 and r_T.ndim == 1 and
+                obs_T_Do.shape[0] == adist_T_Pa.shape[0] == a_T_Da.shape[0] == r_T.shape[0])
         self.obs_T_Do = obs_T_Do
-        self.obsfeat_T_Df = obsfeat_T_Df
         self.adist_T_Pa = adist_T_Pa
         self.a_T_Da = a_T_Da
         self.r_T = r_T
@@ -31,15 +29,11 @@ class Trajectory(object):
         grp.create_dataset('r_T', data=self.r_T, **kwargs)
 
     @classmethod
-    def LoadH5(cls, grp, obsfeat_fn):
+    def LoadH5(cls, grp):
         """
-        obsfeat_fn: Used to fill in observation features.
-                    If None, the raw observations will be copied over.
         """
         obs_T_Do = grp['obs_T_Do'][...]
-        obsfeat_T_Df = obsfeat_fn(obs_T_Do) if obsfeat_fn is not None else obs_T_Do.copy()
-        return cls(obs_T_Do, obsfeat_T_Df, grp['adist_T_Pa'][...], grp['a_T_Da'][...],
-                   grp['r_T'][...])
+        return cls(obs_T_Do, grp['adist_T_Pa'][...], grp['a_T_Da'][...], grp['r_T'][...])
 
 
 def raggedstack(arrays, fill=0., axis=0, raggedaxis=1):
@@ -97,14 +91,13 @@ class RaggedArray(object):
 
 class TrajBatch(object):
 
-    def __init__(self, trajs, obs, obsfeat, adist, a, r, time, info):
-        self.trajs, self.obs, self.obsfeat, self.adist, self.a, self.r, self.time, self.info = trajs, obs, obsfeat, adist, a, r, time, info
+    def __init__(self, trajs, obs, adist, a, r, time, info):
+        self.trajs, self.obs, self.adist, self.a, self.r, self.time, self.info = trajs, obs, adist, a, r, time, info
 
     @classmethod
     def FromTrajs(cls, trajs):
         assert all(isinstance(traj, Trajectory) for traj in trajs)
         obs = RaggedArray([t.obs_T_Do for t in trajs])
-        obsfeat = RaggedArray([t.obsfeat_T_Df for t in trajs])
         adist = RaggedArray([t.adist_T_Pa for t in trajs])
         a = RaggedArray([t.a_T_Da for t in trajs])
         r = RaggedArray([t.r_T for t in trajs])
@@ -113,21 +106,21 @@ class TrajBatch(object):
         if trajs[0].info_D:
             # FIXME: takes sum of info vars (useful for pursuit)
             info = [(k, [np.sum(t.info_D[k]) for t in trajs]) for k in trajs[0].info_D.keys()]
-        return cls(trajs, obs, obsfeat, adist, a, r, time, info)
+        return cls(trajs, obs, adist, a, r, time, info)
 
     def with_replaced_reward(self, new_r):
         new_trajs = [
-            Trajectory(traj.obs_T_Do, traj.obsfeat_T_Df, traj.adist_T_Pa, traj.a_T_Da, traj_new_r)
+            Trajectory(traj.obs_T_Do, traj.adist_T_Pa, traj.a_T_Da, traj_new_r)
             for traj, traj_new_r in util.safezip(self.trajs, new_r)
         ]
-        return TrajBatch(new_trajs, self.obs, self.obsfeat, self.adist, self.a, new_r, self.time)
+        return TrajBatch(new_trajs, self.obs, self.adist, self.a, new_r, self.time)
 
     def with_replaced_adist(self, new_adist):
         new_trajs = [
-            Trajectory(traj.obs_T_Do, traj.obsfeat_T_Df, traj_new_adist, traj.a_T_Da, traj.r_T)
+            Trajectory(traj.obs_T_Do, traj_new_adist, traj.a_T_Da, traj.r_T)
             for traj, traj_new_adist in util.safezip(self.trajs, new_adist)
         ]
-        return TrajBatch(new_trajs, self.obs, self.obsfeat, new_adist, self.a, self.r, self.time)
+        return TrajBatch(new_trajs, self.obs, new_adist, self.a, self.r, self.time)
 
     def __len__(self):
         return len(self.trajs)
@@ -140,5 +133,5 @@ class TrajBatch(object):
             traj.save_h5(f.require_group('%06d' % (i + starting_id)), **kwargs)
 
     @classmethod
-    def LoadH5(cls, dset, obsfeat_fn):
-        return cls.FromTrajs([Trajectory.LoadH5(v, obsfeat_fn) for k, v in dset.iteritems()])
+    def LoadH5(cls, dset):
+        return cls.FromTrajs([Trajectory.LoadH5(v) for k, v in dset.iteritems()])

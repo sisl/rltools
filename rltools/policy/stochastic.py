@@ -12,9 +12,9 @@ from rltools.policy import Policy
 
 class StochasticPolicy(Policy):
 
-    def __init__(self, obsfeat_space, action_space, num_actiondist_params, enable_obsnorm, tblog,
-                 varscope_name):
-        super(StochasticPolicy, self).__init__(obsfeat_space, action_space)
+    def __init__(self, observation_space, action_space, num_actiondist_params, enable_obsnorm,
+                 tblog, varscope_name):
+        super(StochasticPolicy, self).__init__(observation_space, action_space)
 
         with tf.variable_scope(varscope_name) as self.varscope:
             batch_size = None
@@ -31,29 +31,29 @@ class StochasticPolicy(Policy):
                 raise NotImplementedError()
 
             if self.recurrent:
-                obsfeat_shape = list((batch_size,
-                                      None,) + self.obsfeat_space.shape)
+                obs_shape = list((batch_size,
+                                  None,) + self.observation_space.shape)
                 action_shape = [batch_size, None, action_dim]
                 actiondist_shape = [batch_size, None, num_actiondist_params]
                 advantage_shape = [batch_size, None]
             else:
-                obsfeat_shape = list((batch_size,) + self.obsfeat_space.shape)
+                obs_shape = list((batch_size,) + self.observation_space.shape)
                 action_shape = [batch_size, action_dim]
                 actiondist_shape = [batch_size, num_actiondist_params]
                 advantage_shape = [batch_size]
 
             # Action distribution for current policy
-            self._obsfeat = tf.placeholder(tf.float32, obsfeat_shape, name='obsfeat')
+            self._obs = tf.placeholder(tf.float32, obs_shape, name='obs')
             with tf.variable_scope('obsnorm'):
                 self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
-            self._normalized_obsfeat = self.obsnorm.standardize_expr(self._obsfeat)
+                                nn.NoOpStandardizer)(self.observation_space.shape)
+            self._normalized_obs = self.obsnorm.standardize_expr(self._obs)
 
             if self.recurrent:
                 self._actiondist, self._flatinnet, self.compute_step_mean_std, self._hidden_vec = self._make_actiondist_ops(
-                    self._normalized_obsfeat)
+                    self._normalized_obs)
             else:
-                self._actiondist = self._make_actiondist_ops(self._normalized_obsfeat)
+                self._actiondist = self._make_actiondist_ops(self._normalized_obs)
 
             self._input_action = tf.placeholder(action_type, action_shape,
                                                 name='input_actions')  # Action dims FIXME type
@@ -114,15 +114,15 @@ class StochasticPolicy(Policy):
             # KL gradient for TRPO
             self._kl_grad_P = tfutil.flatcat(tfutil.fixedgradients(self._kl, self._param_vars))
 
-            ins = [self._obsfeat, self._input_action, self._proposal_actiondist, self._advantage]
+            ins = [self._obs, self._input_action, self._proposal_actiondist, self._advantage]
             if self.recurrent:
                 ins.append(self._valid)
 
-            self._compute_internal_normalized_obsfeat = tfutil.function([self._obsfeat],
-                                                                        self._normalized_obsfeat)
-            self.compute_action_logprobs = tfutil.function([self._obsfeat, self._input_action],
+            self._compute_internal_normalized_obs = tfutil.function([self._obs],
+                                                                    self._normalized_obs)
+            self.compute_action_logprobs = tfutil.function([self._obs, self._input_action],
                                                            self._logprobs)
-            self.compute_action_dist_params = tfutil.function([self._obsfeat], self._actiondist)
+            self.compute_action_dist_params = tfutil.function([self._obs], self._actiondist)
 
             self.compute_kl_cost = tfutil.function(ins, self._kl)
             self.compute_klgrad = tfutil.function(ins, self._kl_grad_P)
@@ -169,7 +169,7 @@ class StochasticPolicy(Policy):
         """Update norms using moving avg"""
         self.obsnorm.update(obs_B_Do, sess=sess)
 
-    def _make_actiondist_ops(self, obsfeat_B_Df):
+    def _make_actiondist_ops(self, obs_B_Df):
         """Ops to compute action distribution parameters
 
         For Gaussian, these would be mean and std
@@ -189,17 +189,17 @@ class StochasticPolicy(Policy):
     def _compute_actiondist_entropy(self, actiondist_B_Pa):
         raise NotImplementedError()
 
-    def sample_actions(self, obsfeat_B_Df, deterministic=False, **kwargs):
+    def sample_actions(self, obs_B_Df, deterministic=False, **kwargs):
         """Sample actions conditioned on observations
         (Also returns the params)
         """
-        actiondist_B_Pa = self.compute_action_dist_params(obsfeat_B_Df, **kwargs)
+        actiondist_B_Pa = self.compute_action_dist_params(obs_B_Df, **kwargs)
         return self._sample_from_actiondist(actiondist_B_Pa, deterministic), actiondist_B_Pa
 
-    def deterministic_action(self, sess, obsfeat_B_Df):
+    def deterministic_action(self, sess, obs_B_Df):
         """Return the argmax of distribution
         """
-        actiondist_B_Pa = self.compute_action_dist_params(obsfeat_B_Df, sess=sess)
+        actiondist_B_Pa = self.compute_action_dist_params(obs_B_Df, sess=sess)
         a = self._sample_from_actiondist(actiondist_B_Pa, deterministic=True)
         return a[0, 0]
 

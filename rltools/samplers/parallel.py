@@ -192,7 +192,6 @@ class RolloutServer(object):
     def __init__(self, sess, env, policy, max_traj_len, action_space, mode='centralized'):
         self.sess = sess
         self.env = env
-        self.obsfeat_fn = lambda obs: obs
         self.policy = policy
         self.max_traj_len = max_traj_len
         self.action_space = action_space
@@ -211,16 +210,14 @@ class RolloutServer(object):
         random.seed(seed)
         if self.mode == 'concurrent':
             traj = self.rollout_fn(
-                self.env, self.obsfeat_fn,
-                [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
+                self.env, [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
                 self.max_traj_len, self.action_space)
         else:
             if self.mode == 'decentralized':
                 self.policy.reset(dones=[True] * len(self.env.agents))
             else:
                 self.policy.reset()
-            traj = self.rollout_fn(self.env, self.obsfeat_fn,
-                                   lambda ofeat: self.policy.sample_actions(ofeat),
+            traj = self.rollout_fn(self.env, lambda ofeat: self.policy.sample_actions(ofeat),
                                    self.max_traj_len, self.action_space)
 
         return _dumps(traj)

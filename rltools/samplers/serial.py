@@ -24,8 +24,7 @@ class SimpleSampler(Sampler):
         timesteps_sofar = 0
         while True:
             self.algo.policy.reset()
-            traj = centrollout(self.algo.env, self.algo.obsfeat_fn,
-                               lambda ofeat: self.algo.policy.sample_actions(ofeat),
+            traj = centrollout(self.algo.env, lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                self.max_traj_len, self.algo.policy.action_space)
             trajs.append(traj)
             timesteps_sofar += len(traj)
@@ -65,7 +64,7 @@ class DecSampler(Sampler):
         timesteps_sofar = 0
         while True:
             self.algo.policy.reset(dones=[True] * len(env.agents))
-            ag_trajs = decrollout(self.algo.env, self.algo.obsfeat_fn,
+            ag_trajs = decrollout(self.algo.env,
                                   lambda ofeat: self.algo.policy.sample_actions(ofeat),
                                   self.max_traj_len, self.algo.policy.action_space)
             trajs.extend(ag_trajs)
@@ -166,7 +165,7 @@ class ImportanceWeightedSampler(SimpleSampler):
 
             for traj in samples:
                 # What the current policy would have done
-                _, adist_T_Pa = self.algo.policy.sample_actions(traj.obsfeat_T_Df)
+                _, adist_T_Pa = self.algo.policy.sample_actions(traj.obs_T_Do)
                 # What the older policy did
                 hist_adist_T_Pa = traj.adist_T_Pa
 
@@ -235,8 +234,8 @@ class ExperienceReplay(Sampler):
 
         indices = random.sample(xrange(self.replay_size), self.batch_size)
 
-        ofeat = self.algo.obsfeat_fn(np.expand_dims(self.old_ob, 0))
-        a, _ = self.algo.policy.sample_actions(ofeat)
+        o = np.expand_dims(self.old_ob, 0)
+        a, _ = self.algo.policy.sample_actions(o)
         o, r, done, _ = env.step(a[0, 0])
         self.store(self.old_ob, a, r, o, done)
         if done or itr % self.max_traj_len == 0:

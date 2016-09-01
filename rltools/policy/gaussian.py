@@ -11,15 +11,15 @@ from rltools.util import EzPickle
 
 class GaussianMLPPolicy(StochasticPolicy, EzPickle):
 
-    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
+    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
                  init_logstdev, tblog, varscope_name):
-        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                          init_logstdev, tblog, varscope_name)
+        EzPickle.__init__(self, observation_space, action_space, hidden_spec, enable_obsnorm,
+                          min_stdev, init_logstdev, tblog, varscope_name)
         self.hidden_spec = hidden_spec
         self.min_stdev = min_stdev
         self.init_logstdev = init_logstdev
         self._dist = Gaussian(action_space.shape[0])
-        super(GaussianMLPPolicy, self).__init__(obsfeat_space,
+        super(GaussianMLPPolicy, self).__init__(observation_space,
                                                 action_space,
                                                 action_space.shape[0] *
                                                 2,  # Mean and diagonal stdev
@@ -31,9 +31,9 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
     def distribution(self):
         return self._dist
 
-    def _make_actiondist_ops(self, obsfeat_B_Df):
+    def _make_actiondist_ops(self, obs_B_Df):
         with tf.variable_scope('flat'):
-            flat = nn.FlattenLayer(obsfeat_B_Df)
+            flat = nn.FlattenLayer(obs_B_Df)
         with tf.variable_scope('hidden'):
             net = nn.FeedforwardNet(flat.output, flat.output_shape, self.hidden_spec)
         with tf.variable_scope('out'):
@@ -80,10 +80,10 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
 
 class GaussianGRUPolicy(StochasticPolicy, EzPickle):
 
-    def __init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
+    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
                  init_logstdev, state_include_action, tblog, varscope_name):
-        EzPickle.__init__(self, obsfeat_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                          init_logstdev, state_include_action, tblog, varscope_name)
+        EzPickle.__init__(self, observation_space, action_space, hidden_spec, enable_obsnorm,
+                          min_stdev, init_logstdev, state_include_action, tblog, varscope_name)
         self.hidden_spec = hidden_spec
         self.min_stdev = min_stdev
         self.init_logstdev = init_logstdev
@@ -91,7 +91,7 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
         self._dist = RecurrentGaussian(action_space.shape[0])
         self.prev_actions = None
         self.prev_hiddens = None
-        super(GaussianGRUPolicy, self).__init__(obsfeat_space,
+        super(GaussianGRUPolicy, self).__init__(observation_space,
                                                 action_space,
                                                 action_space.shape[0] *
                                                 2,  # Mean and diagonal stdev
@@ -107,16 +107,16 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
     def recurrent(self):
         return True
 
-    def _make_actiondist_ops(self, obsfeat_B_H_Df):
-        B = tf.shape(obsfeat_B_H_Df)[0]
-        H = tf.shape(obsfeat_B_H_Df)[1]
-        flatobsfeat_B_H_Df = tf.reshape(obsfeat_B_H_Df, tf.pack([B, H, -1]))
+    def _make_actiondist_ops(self, obs_B_H_Df):
+        B = tf.shape(obs_B_H_Df)[0]
+        H = tf.shape(obs_B_H_Df)[1]
+        flatobs_B_H_Df = tf.reshape(obs_B_H_Df, tf.pack([B, H, -1]))
         if self.state_include_action:
-            net_in = tf.concat(2, [flatobsfeat_B_H_Df, self._prev_actions_B_H_Da])
-            net_shape = (np.prod(self.obsfeat_space.shape) + self.action_space.shape[0],)
+            net_in = tf.concat(2, [flatobs_B_H_Df, self._prev_actions_B_H_Da])
+            net_shape = (np.prod(self.observation_space.shape) + self.action_space.shape[0],)
         else:
-            net_in = flatobsfeat_B_H_Df
-            net_shape = (np.prod(self.obsfeat_space.shape),)
+            net_in = flatobs_B_H_Df
+            net_shape = (np.prod(self.observation_space.shape),)
         with tf.variable_scope('meannet'):
             meannet = nn.GRUNet(net_in, net_shape, self.action_space.shape[0], self.hidden_spec)
 
@@ -140,9 +140,9 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
         stepstdevs_B_Da = tf.ones_like(meannet.step_output) * stepstdevs_1_Da
 
         if self.state_include_action:
-            indim = np.prod(self.obsfeat_space.shape) + self.action_space.shape[0]
+            indim = np.prod(self.observation_space.shape) + self.action_space.shape[0]
         else:
-            indim = np.prod(self.obsfeat_space.shape)
+            indim = np.prod(self.observation_space.shape)
 
         compute_step_mean_std = tfutil.function(
             [meannet.step_input, meannet.step_prev_hidden],
@@ -190,14 +190,14 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
         self.prev_actions[dones] = 0.
         self.prev_hiddens[dones] = self._hidden_vec.eval()
 
-    def sample_actions(self, obsfeat_B_Df, deterministic=False):
-        B = obsfeat_B_Df.shape[0]
-        flat_obsfeat_B_Df = obsfeat_B_Df.reshape((B, -1))
+    def sample_actions(self, obs_B_Df, deterministic=False):
+        B = obs_B_Df.shape[0]
+        flat_obs_B_Df = obs_B_Df.reshape((B, -1))
         if self.state_include_action:
             assert self.prev_actions is not None
-            net_in_B_Do = np.concatenate([flat_obsfeat_B_Df, self.prev_actions], axis=-1)
+            net_in_B_Do = np.concatenate([flat_obs_B_Df, self.prev_actions], axis=-1)
         else:
-            net_in_B_Do = flat_obsfeat_B_Df
+            net_in_B_Do = flat_obs_B_Df
 
         means_B_Da, stdevs_B_Da, hidden_vec = self.compute_step_mean_std(net_in_B_Do,
                                                                          self.prev_hiddens)
