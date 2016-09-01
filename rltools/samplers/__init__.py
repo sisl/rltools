@@ -94,7 +94,7 @@ class Sampler(object):
 def centrollout(env, act_fn, max_traj_len, action_space):
     assert env.reward_mech == 'global'
     obs, actions, actiondists, rewards = [], [], [], []
-    traj_info = {}
+    traj_info_list = []
     obs.append(np.c_[env.reset()].ravel()[None, ...].copy())
 
     for itr in range(max_traj_len):
@@ -114,20 +114,15 @@ def centrollout(env, act_fn, max_traj_len, action_space):
         assert (r == r[0]).all()
         rewards.append(r[0])
 
-        if bool(info):
-            # info is not None or empty dict
-            if not traj_info:
-                traj_info = traj_info.fromkeys(info.keys())
-                for k in traj_info.keys():
-                    traj_info[k] = []
-            for k in info.keys():
-                traj_info[k].append(info[k])
+        if info:
+            traj_info_list.append(info)
 
         if done:
             break
         if itr != max_traj_len - 1:
             obs.append(np.c_[o2].ravel()[None, ...])
 
+    traj_info = rltools.util.stack_dict_list(traj_info_list)
     obs_T_Do = np.concatenate(obs)
     assert obs_T_Do.shape[0] == len(obs), '{} != {}'.format(obs_T_Do.shape, len(obs))
     adist_T_Pa = np.concatenate(actiondists)
@@ -148,15 +143,11 @@ def get_lists(nl, na):
 
 
 def decrollout(env, act_fn, max_traj_len, action_space):
-    # if not isinstance(act_fn, list):
-    #     act_fn = [act_fn for _ in env.agents]
-
-    # assert len(act_fn) == len(env.agents)
     assert not isinstance(act_fn, list)
     trajs = []
     old_obs = env.reset()
     obs, actions, actiondists, rewards = get_lists(4, len(env.agents))
-    traj_info = {}
+    traj_info_list = []
 
     for itr in range(max_traj_len):
         agent_actions, adist_list = act_fn(np.asarray(old_obs))
@@ -171,14 +162,8 @@ def decrollout(env, act_fn, max_traj_len, action_space):
         else:
             new_obs, r, done, info = env.step(comp_actions)
 
-        if bool(info):
-            # info is not None or empty dict
-            if not traj_info:
-                traj_info = traj_info.fromkeys(info.keys())
-                for k in traj_info.keys():
-                    traj_info[k] = []
-            for k in info.keys():
-                traj_info[k].append(info[k])
+        if info:
+            traj_info_list.append(info)
 
         for i, o in enumerate(old_obs):
             if o is None:
@@ -190,6 +175,7 @@ def decrollout(env, act_fn, max_traj_len, action_space):
         if done:
             break
 
+    traj_info = rltools.util.stack_dict_list(traj_info_list)
     for agnt in range(len(env.agents)):
         obs_T_Do = np.concatenate(obs[agnt])
         adist_T_Pa = np.concatenate(np.expand_dims(np.asarray(actiondists[agnt]), 0))
@@ -206,7 +192,7 @@ def concrollout(env, act_fns, max_traj_len, action_space):
     trajs = []
     old_obs = env.reset()
     obs, actions, actiondists, rewards = get_lists(4, len(env.agents))
-    traj_info = {}
+    traj_info_list = []
     for itr in range(max_traj_len):
         agent_action_adist_list = [act_fn(np.expand_dims(oo, 0))
                                    for act_fn, oo in zip(act_fns, old_obs)]
@@ -223,14 +209,8 @@ def concrollout(env, act_fns, max_traj_len, action_space):
         else:
             new_obs, r, done, info = env.step(comp_actions)
 
-        if bool(info):
-            # info is not None or empty dict
-            if not traj_info:
-                traj_info = traj_info.fromkeys(info.keys())
-                for k in traj_info.keys():
-                    traj_info[k] = []
-            for k in info.keys():
-                traj_info[k].append(info[k])
+        if info:  # XXX what if some infos are none in a traj?
+            traj_info_list.append(info)
 
         for i, o in enumerate(old_obs):
             if o is None:
@@ -242,6 +222,7 @@ def concrollout(env, act_fns, max_traj_len, action_space):
         if done:
             break
 
+    traj_info = rltools.util.stack_dict_list(traj_info_list)
     for agnt in range(len(env.agents)):
         obs_T_Do = np.concatenate(obs[agnt])
         adist_T_Pa = np.concatenate(np.asarray(actiondists[agnt]))
@@ -254,7 +235,7 @@ def concrollout(env, act_fns, max_traj_len, action_space):
 
 def evaluate(env, action_fn, max_traj_len, n_traj):
     rs = np.zeros(n_traj)
-    for t in xrange(n_traj):
+    for t in range(n_traj):
         rtot = 0.0
         o = env.reset()
         for itr in range(max_traj_len):
