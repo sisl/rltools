@@ -13,9 +13,9 @@ class MLPBaseline(Baseline, nn.Model):
     Optimized using natural gradients.
     """
 
-    def __init__(self, obsfeat_space, hidden_spec, enable_obsnorm, enable_vnorm, max_kl, damping,
-                 varscope_name, subsample_hvp_frac=.1, grad_stop_tol=1e-6, time_scale=1.):
-        self.obsfeat_space = obsfeat_space
+    def __init__(self, observation_space, hidden_spec, enable_obsnorm, enable_vnorm, max_kl,
+                 damping, varscope_name, subsample_hvp_frac=.1, grad_stop_tol=1e-6, time_scale=1.):
+        self.observation_space = observation_space
         self.hidden_spec = hidden_spec
         self.enable_obsnorm = enable_obsnorm
         self.enable_vnorm = enable_vnorm
@@ -28,19 +28,18 @@ class MLPBaseline(Baseline, nn.Model):
         with tf.variable_scope(varscope_name) as self.varscope:
             with tf.variable_scope('obsnorm'):
                 self.obsnorm = (nn.Standardizer if enable_obsnorm else
-                                nn.NoOpStandardizer)(self.obsfeat_space.shape)
+                                nn.NoOpStandardizer)(self.observation_space.shape)
             with tf.variable_scope('vnorm'):
                 self.vnorm = (nn.Standardizer if enable_vnorm else nn.NoOpStandardizer)(1)
 
             batch_size = None
-            self._obsfeat_B_Df = tf.placeholder(tf.float32,
-                                                list((batch_size,) + self.obsfeat_space.shape),
-                                                name='obsfeat_B_Df')  # FIXME shape
+            self._obs_B_Df = tf.placeholder(tf.float32,
+                                            list((batch_size,) + self.observation_space.shape),
+                                            name='obs_B_Df')  # FIXME shape
             self._t_B = tf.placeholder(tf.float32, [batch_size], name='t_B')
             self._t_B_1 = tf.expand_dims(self._t_B, 1)
             scaled_t_B_1 = self._t_B_1 * self.time_scale
-            self._normalized_obsfeat_B_Df = self.obsnorm.standardize_expr(self._obsfeat_B_Df)
-            self._val_B = self._make_val_op(self._normalized_obsfeat_B_Df, scaled_t_B_1)
+            self._val_B = self._make_val_op(self._obs_B_Df, scaled_t_B_1)
 
         # Only code above has trainable vars
         self._param_vars = self.get_variables(trainable=True)
@@ -63,7 +62,7 @@ class MLPBaseline(Baseline, nn.Model):
         self._flatparams_P = tf.placeholder(tf.float32, [self._num_params], name='flatparams_P')
         self._assign_params = tfutil.unflatten_into_vars(self._flatparams_P, self._param_vars)
 
-        ins = [self._obsfeat_B_Df, self._t_B, self._target_val_B, self._old_val_B]
+        ins = [self._obs_B_Df, self._t_B, self._target_val_B, self._old_val_B]
         compute_klgrad = tfutil.function(ins, self._kl_grad_P)
         compute_obj_kl = tfutil.function(ins, [self._obj, self._kl])
         compute_obj_kl_with_grad = tfutil.function(ins, [self._obj, self._kl, self._objgrad_P])
@@ -74,9 +73,9 @@ class MLPBaseline(Baseline, nn.Model):
         self.set_params = tfutil.function([self._flatparams_P], [], [self._assign_params])
         self.get_params = tfutil.function([], self._curr_params_P)
 
-    def _make_val_op(self, obsfeat_B_Df, scaled_t_B_1):
+    def _make_val_op(self, obs_B_Df, scaled_t_B_1):
         with tf.variable_scope('flat'):
-            flat = nn.FlattenLayer(obsfeat_B_Df)
+            flat = nn.FlattenLayer(obs_B_Df)
         net_input = tf.concat(1, [flat.output, scaled_t_B_1])
         net_shape = (flat.output_shape[0] + 1,)
         with tf.variable_scope('hidden'):
@@ -98,8 +97,8 @@ class MLPBaseline(Baseline, nn.Model):
         yield  # Do what you gotta do
         self.set_params(orig_params_D, **kwargs)
 
-    def _predict_raw(self, sess, obsfeat_B_Df, t_B):
-        return sess.run(self._val_B, {self._obsfeat_B_Df: obsfeat_B_Df, self._t_B: t_B})
+    def _predict_raw(self, sess, obs_B_Df, t_B):
+        return sess.run(self._val_B, {self._obs_B_Df: obs_B_Df, self._t_B: t_B})
 
     def fit(self, sess, trajs, qval_B):
         obs_B_Do = trajs.obs.stacked

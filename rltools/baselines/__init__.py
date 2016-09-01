@@ -1,6 +1,7 @@
 class Baseline(object):
-    def __init__(self, obsfeat_space):
-        self.obsfeat_space = obsfeat_space
+
+    def __init__(self, observation_space):
+        self.observation_space = observation_space
 
     def get_params(self, sess):
         raise NotImplementedError()

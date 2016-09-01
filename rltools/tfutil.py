@@ -52,6 +52,18 @@ def flatcat(arrays, name=None):
         return tf.concat(0, [tf.reshape(a, [-1]) for a in arrays], name=scope)
 
 
+def fixedgradients(loss, params):
+    """
+    Replace None by zero shaped as params
+    """
+    grads = tf.gradients(loss, xs=params)
+    for idx, (grad, param) in enumerate(zip(grads, params)):
+        if grad is None:
+            grads[idx] = tf.zeros_like(param)
+
+    return grads
+
+
 def unflatten_into_tensors(flatparams_P, output_shapes, name=None):
     """
     Unflattens a vector produced by flatcat into a list of tensors of the specified shapes.

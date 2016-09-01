@@ -13,48 +13,11 @@ import zerorpc
 from gevent import Timeout
 from zerorpc.gevent_zmq import logger as gevent_log
 
-from rltools.samplers import Sampler, decrollout, centrollout
+from rltools.samplers import Sampler, decrollout, centrollout, concrollout
 from rltools.trajutil import TrajBatch, Trajectory
 from six.moves import cPickle
 
 gevent_log.setLevel(logging.CRITICAL)
-
-
-class ThreadedSampler(Sampler):
-
-    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
-                 n_timesteps_max, adaptive=False, enable_rewnorm=True, n_workers=4):
-        super(ThreadedSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
-                                              n_timesteps_min, n_timesteps_max, adaptive,
-                                              enable_rewnorm)
-
-        self.n_workers = n_workers
-
-    def sample(self, sess, itr):
-        if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
-            if itr % self.timestep_rate == 0:
-                self.n_timesteps *= 2
-
-        r_func = lambda mtl: centrollout(self.algo.env, self.algo.obsfeat_fn, lambda ofeat: self.algo.policy.sample_actions(ofeat), mtl, self.algo.policy.action_space)
-
-        with ThreadPoolExecutor(self.n_workers) as self.executor:
-            trajs = self.executor.map(r_func, [self.max_traj_len] * int(self.n_timesteps /
-                                                                        self.max_traj_len))  # XXX
-
-        if not isinstance(trajs, list):
-            trajs = list(trajs)
-
-        trajbatch = TrajBatch.FromTrajs(trajs)
-        return (trajbatch,
-                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
-                  float),  # average return for batch of traj
-                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
-                  int),  # average traj length
-                 ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
-                 ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
-                 ('ravg', trajbatch.r.stacked.mean(),
-                  int)  # avg reward encountered per time step (probably not that useful)
-                ])
 
 
 class ParallelSampler(Sampler):
@@ -85,7 +48,7 @@ class ParallelSampler(Sampler):
                 self.n_timesteps *= 2
 
         if self.mode == 'concurrent':
-            state_str = [_dumps(policy.get_state()) for policy in self.algo.policies]
+            state_str = _dumps([policy.get_state() for policy in self.algo.policies])
         else:
             state_str = _dumps(self.algo.policy.get_state())
         [proxies.client("set_state", state_str, async=True) for proxies in self.proxies]
@@ -162,40 +125,38 @@ class ParallelSampler(Sampler):
             self.n_episodes += len(trajbatches[0])
             return (
                 trajbatches,
-                [('ret', np.sum(
+                [('ret', np.mean(
                     [trajbatch.r.padded(fill=0.).sum(axis=1).mean() for trajbatch in trajbatches]),
                   float),
-                 ('batch', np.sum([len(trajbatch) for trajbatch in trajbatches]), float),
+                 ('batch', np.mean([len(trajbatch) for trajbatch in trajbatches]), float),
                  ('n_episodes', self.n_episodes, int),  # total number of episodes                 
                  ('avglen',
-                  int(np.mean([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
-                  int),
+                  int(np.mean([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
+                 ),
                  ('maxlen',
-                  int(np.max([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
-                  int),  # max traj length
+                  int(np.max([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
+                 ),  # max traj length
                  ('minlen',
-                  int(np.min([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
-                  int),  # min traj length
+                  int(np.min([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
+                 ),  # min traj length
                  ('ravg', np.mean([trajbatch.r.stacked.mean() for trajbatch in trajbatches]), float)
-                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info]
-                )
+                ] + [(info[0], np.mean(info[1]), float) for info in trajbatches[0].info])
         else:
             trajbatch = TrajBatch.FromTrajs(trajs)
             self.n_episodes += len(trajbatch)
             return (
                 trajbatch,
-                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(),
-                  float),  # average return for batch of traj
+                [('ret', trajbatch.r.padded(fill=0.).sum(axis=1).mean(), float
+                 ),  # average return for batch of traj
                  ('batch', len(trajbatch), int),  # batch size
                  ('n_episodes', self.n_episodes, int),  # total number of episodes
-                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])),
-                  int),  # average traj length
+                 ('avglen', int(np.mean([len(traj) for traj in trajbatch])), int
+                 ),  # average traj length
                  ('maxlen', int(np.max([len(traj) for traj in trajbatch])), int),  # max traj length
                  ('minlen', int(np.min([len(traj) for traj in trajbatch])), int),  # min traj length
-                 ('ravg', trajbatch.r.stacked.mean(),
-                  float)  # avg reward encountered per time step (probably not that useful)
-                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info]
-                )
+                 ('ravg', trajbatch.r.stacked.mean(), float
+                 )  # avg reward encountered per time step (probably not that useful)
+                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info])
 
 
 class RolloutProxy(object):
@@ -231,7 +192,6 @@ class RolloutServer(object):
     def __init__(self, sess, env, policy, max_traj_len, action_space, mode='centralized'):
         self.sess = sess
         self.env = env
-        self.obsfeat_fn = lambda obs: obs
         self.policy = policy
         self.max_traj_len = max_traj_len
         self.action_space = action_space
@@ -241,7 +201,7 @@ class RolloutServer(object):
         elif self.mode == 'decentralized':
             self.rollout_fn = decrollout
         elif self.mode == 'concurrent':
-            self.rollout_fn = decrollout
+            self.rollout_fn = concrollout
 
     def sample(self, seed):
         self.env.seed(seed)
@@ -250,19 +210,22 @@ class RolloutServer(object):
         random.seed(seed)
         if self.mode == 'concurrent':
             traj = self.rollout_fn(
-                self.env, self.obsfeat_fn,
-                [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
+                self.env, [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
                 self.max_traj_len, self.action_space)
         else:
-            traj = self.rollout_fn(self.env, self.obsfeat_fn,
-                                   lambda ofeat: self.policy.sample_actions(ofeat),
+            if self.mode == 'decentralized':
+                self.policy.reset(dones=[True] * len(self.env.agents))
+            else:
+                self.policy.reset()
+            traj = self.rollout_fn(self.env, lambda ofeat: self.policy.sample_actions(ofeat),
                                    self.max_traj_len, self.action_space)
 
         return _dumps(traj)
 
     def set_state(self, state_str):
         if self.mode == 'concurrent':
-            [policy.set_state(_loads(state_str[agid])) for agid, policy in enumerate(self.policy)]
+            state = _loads(state_str)
+            [policy.set_state(state[agid]) for agid, policy in enumerate(self.policy)]
         else:
             self.policy.set_state(_loads(state_str))
 

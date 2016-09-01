@@ -5,7 +5,7 @@ from rltools.baselines import Baseline
 
 class ZeroBaseline(Baseline):
 
-    def __init__(self, obsfeat_space):
+    def __init__(self, observation_space):
         pass
 
     def get_params(self, sess):

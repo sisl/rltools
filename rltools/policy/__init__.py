@@ -7,11 +7,11 @@ class Policy(nn.Model):
         self._observation_space = observation_space
         self._action_space = action_space
 
-    def reset(self):
+    def reset(self, *args, **kwargs):
         pass
 
     @property
-    def obsfeat_space(self):
+    def observation_space(self):
         return self._observation_space
 
     @property
