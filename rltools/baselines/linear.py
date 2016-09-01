@@ -22,15 +22,16 @@ class LinearFeatureBaseline(Baseline):
     def set_params(self, _, vals):
         self.w_Df = vals
 
-    def update_obsnorm(self, sess, obs_B_Do):
+    def update_obsnorm(self, obs_B_Do, sess):
         """Update norms using moving avg"""
-        self.obsnorm.update(sess, obs_B_Do)
+        self.obsnorm.update(obs_B_Do, sess=sess)
 
     def _features(self, sess, trajs):
         obs_B_Do = trajs.obsfeat.stacked
-        sobs_B_Do = self.obsnorm.standardize(sess, obs_B_Do)
+        sobs_B_Do = self.obsnorm.standardize(obs_B_Do, sess=sess)
         return np.concatenate([
-            sobs_B_Do, trajs.time.stacked[:, None] / 100., (trajs.time.stacked[:, None] / 100.)**2,
+            sobs_B_Do.reshape(len(sobs_B_Do), np.prod(sobs_B_Do.shape[1:])), 
+            trajs.time.stacked[:, None] / 100., (trajs.time.stacked[:, None] / 100.)**2,
             np.ones((sobs_B_Do.shape[0], 1))
         ], axis=1)
 
