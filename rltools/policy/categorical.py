@@ -25,10 +25,12 @@ class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
         return self._dist
 
     def _make_actiondist_ops(self, obsfeat_B_Df):
-        with tf.variable_scope('flat'):
-            flat = nn.FlattenLayer(obsfeat_B_Df)
+        #import IPython
+        #IPython.embed()
+        #with tf.variable_scope('flat'):
+        #    flat = nn.FlattenLayer(obsfeat_B_Df, outdim=len(obsfeat_B_Df.get_shape()))
         with tf.variable_scope('hidden'):
-            net = nn.FeedforwardNet(flat.output, flat.output_shape, self.hidden_spec)
+            net = nn.FeedforwardNet(obsfeat_B_Df, self.obsfeat_space.shape, self.hidden_spec)
         with tf.variable_scope('out'):
             out_layer = nn.AffineLayer(net.output, net.output_shape, (self.action_space.n,),
                                        Winitializer=tf.zeros_initializer,
