@@ -3,7 +3,7 @@ import random
 
 import numpy as np
 
-from rltools.samplers import Sampler, centrollout, decrollout
+from rltools.samplers import Sampler, centrollout, decrollout, concrollout
 from rltools.trajutil import TrajBatch, Trajectory
 
 
@@ -84,6 +84,53 @@ class DecSampler(Sampler):
                  ('ravg', trajbatch.r.stacked.mean(), int
                  )  # avg reward encountered per time step (probably not that useful)
                 ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info])
+
+
+class ConcSampler(Sampler):
+
+    def __init__(self, algo, n_timesteps, max_traj_len, timestep_rate, n_timesteps_min,
+                 n_timesteps_max, adaptive=False, enable_rewnorm=True):
+        super(ConcSampler, self).__init__(algo, n_timesteps, max_traj_len, timestep_rate,
+                                          n_timesteps_min, n_timesteps_max, adaptive,
+                                          enable_rewnorm)
+
+    def sample(self, sess, itr):
+        if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
+            if itr % self.timestep_rate == 0:
+                self.n_timesteps *= 2
+
+        env = self.algo.env
+        timesteps_sofar = 0
+        trajslist = [[] for _ in range(len(env.agents))]
+        while True:
+            [policy.reset() for policy in self.algo.policies]
+            ag_trajs = concrollout(
+                self.algo.env,
+                [lambda o: policy.sample_actions(o) for policy in self.algo.policies],
+                self.max_traj_len, self.algo.policies[0].action_space)
+            for agid, agtraj in enumerate(ag_trajs):
+                trajslist[agid].append(agtraj)
+
+            timesteps_sofar += len(ag_trajs[0])
+            if timesteps_sofar >= self.n_timesteps:
+                break
+
+        trajbatches = [TrajBatch.FromTrajs(trajs) for trajs in trajslist]
+        return (
+            trajbatches,
+            [('ret', np.mean(
+                [trajbatch.r.padded(fill=0.).sum(axis=1).mean() for trajbatch in trajbatches]),
+              float),
+             ('batch', np.mean([len(trajbatch) for trajbatch in trajbatches]), float),
+             ('n_episodes', self.n_episodes, int),  # total number of episodes                 
+             ('avglen',
+              int(np.mean([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int),
+             ('maxlen', int(np.max([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
+              int),  # max traj length
+             ('minlen', int(np.min([len(traj) for traj in trajbatch for trajbatch in trajbatches])),
+              int),  # min traj length
+             ('ravg', np.mean([trajbatch.r.stacked.mean() for trajbatch in trajbatches]), float)] +
+            [(info[0], np.mean(info[1]), float) for info in trajbatches[0].info])
 
 
 class ImportanceWeightedSampler(SimpleSampler):

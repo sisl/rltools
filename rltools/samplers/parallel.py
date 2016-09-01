@@ -140,7 +140,7 @@ class ParallelSampler(Sampler):
                   int(np.min([len(traj) for traj in trajbatch for trajbatch in trajbatches])), int
                  ),  # min traj length
                  ('ravg', np.mean([trajbatch.r.stacked.mean() for trajbatch in trajbatches]), float)
-                ] + [(info[0], np.mean(info[1]), float) for info in trajbatch.info])
+                ] + [(info[0], np.mean(info[1]), float) for info in trajbatches[0].info])
         else:
             trajbatch = TrajBatch.FromTrajs(trajs)
             self.n_episodes += len(trajbatch)
