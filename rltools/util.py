@@ -122,6 +122,22 @@ def lookup_last_idx(a, inds):
     return np.reshape(gather(aflat, aflatinds), indsshape)
 
 
+def stack_dict_list(dict_list):
+    ret = dict()
+    if not dict_list:
+        return ret
+    keys = dict_list[0].keys()
+    for k in keys:
+        eg = dict_list[0][k]
+        if isinstance(eg, dict):
+            v = stack_dict_list([x[k] for x in dict_list])
+        else:
+            v = np.array([x[k] for x in dict_list])
+        ret[k] = v
+
+    return ret
+
+
 class Color(object):
     HEADER = '\033[95m'
     OKBLUE = '\033[94m'
