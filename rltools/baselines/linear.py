@@ -30,7 +30,8 @@ class LinearFeatureBaseline(Baseline):
         obs_B_Do = trajs.obs.stacked
         sobs_B_Do = self.obsnorm.standardize(obs_B_Do)
         return np.concatenate([
-            sobs_B_Do, trajs.time.stacked[:, None] / 100., (trajs.time.stacked[:, None] / 100.)**2,
+            sobs_B_Do.reshape(len(sobs_B_Do), np.prod(sobs_B_Do.shape[1:])), 
+            trajs.time.stacked[:, None] / 100., (trajs.time.stacked[:, None] / 100.)**2,
             np.ones((sobs_B_Do.shape[0], 1))
         ], axis=1)
 

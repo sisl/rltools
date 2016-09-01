@@ -186,11 +186,16 @@ class NonlinearityLayer(Layer):
 
 class ConvLayer(Layer):
 
-    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Oh, Ow, Sh, Sw, padding,
+    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Sh, Sw, padding,
                  initializer):
-        # TODO: calculate Oh and Ow from the other stuff.
         assert len(input_shape) == 3
-        Ci = input_shape[2]
+        Ih, Iw, Ci = input_shape
+        if padding == 'SAME':
+            Oh = np.ceil(float(Ih) / float(Sh))
+            Ow = np.ceil(float(Iw) / float(Sw))
+        elif padding == 'VALID':
+            Oh = np.ceil(float(Ih - Fh + 1) / float(Sh))
+            Ow = np.ceil(float(Iw - Fw + 1) / float(Sw))
         util.header(
             'Conv(chanin=%d, chanout=%d, filth=%d, filtw=%d, outh=%d, outw=%d, strideh=%d, stridew=%d, padding=%s)'
             % (Ci, Co, Fh, Fw, Oh, Ow, Sh, Sw, padding))
@@ -365,6 +370,10 @@ class FeedforwardNet(Layer):
                         _check_keys(ls, ['type', 'new_shape'], [])
                         self.layers.append(ReshapeLayer(prev_output, ls['new_shape']))
 
+                    elif ls['type'] == 'flatten':
+                        _check_keys(ls, ['type'], [])
+                        self.layers.append(FlattenLayer(prev_output))
+
                     elif ls['type'] == 'fc':
                         _check_keys(ls, ['type', 'n'], ['initializer'])
                         self.layers.append(
@@ -373,13 +382,13 @@ class FeedforwardNet(Layer):
 
                     elif ls['type'] == 'conv':
                         _check_keys(ls,
-                                    ['type', 'chanout', 'filtsize', 'outsize', 'stride', 'padding'],
+                                    ['type', 'chanout', 'filtsize', 'stride', 'padding'],
                                     ['initializer'])
                         self.layers.append(
                             ConvLayer(input_B_Ih_Iw_Ci=prev_output, input_shape=prev_output_shape,
-                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'], Oh=ls[
-                                          'outsize'], Ow=ls['outsize'], Sh=ls['stride'], Sw=ls[
-                                              'stride'], padding=ls['padding'],
+                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'],
+                                         Sh=ls['stride'], Sw=ls['stride'], 
+                                         padding=ls['padding'],
                                       initializer=_parse_initializer(ls)))
 
                     elif ls['type'] == 'nonlin':
