@@ -52,7 +52,7 @@ class Model(object):
             for v, val in util.safezip(vs, vals):
                 dset[v.name] = val
 
-            dset.attrs['hash'] = self.savehash(sess)
+            dset[self.varscope.name].attrs['hash'] = self.savehash(sess)
             if extra_attrs is not None:
                 for k, v in extra_attrs:
                     if k in dset.attrs:
@@ -74,9 +74,13 @@ class Model(object):
             sess.run(ops)
 
             h = self.savehash(sess)
-            assert h == dset[self.varscope.name].attrs[
-                'hash'], 'Checkpoint hash {} does not match loaded hash {}'.format(
-                    dset[self.varscope.name].attrs['hash'], h)
+            try:
+                assert h == dset[self.varscope.name].attrs[
+                    'hash'], 'Checkpoint hash {} does not match loaded hash {}'.format(
+                        dset[self.varscope.name].attrs['hash'], h)
+            except AssertionError as err:
+                util.warn('Checkpoint hash {} does not match loaded hash {}'.format(dset[
+                    self.varscope.name].attrs['hash'], h))
 
 # Layers for feedforward networks
 
