@@ -203,6 +203,8 @@ class StochasticPolicy(Policy):
         a = self._sample_from_actiondist(actiondist_B_Pa, deterministic=True)
         return a[0, 0]
 
+    def merge_summary(self, sess):
+        sess.run(tf.merge_all_summaries())
     # TODO penobj computes
 
     # def set_params(self, params_P, **kwargs):
