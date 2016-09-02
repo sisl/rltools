@@ -70,7 +70,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
                 self.sampler.rewnorm.update(trajbatch.r.stacked[:, None], sess=sess)
         # LOG
         self.total_time += t_all.dt
-        self.policy.merge_summary(sess=sess)
+
         fields = [
             ('iter', itr, int)
         ] + sample_info_fields + [
