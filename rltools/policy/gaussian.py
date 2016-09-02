@@ -12,9 +12,9 @@ from rltools.util import EzPickle
 class GaussianMLPPolicy(StochasticPolicy, EzPickle):
 
     def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                 init_logstdev, tblog, varscope_name):
+                 init_logstdev, varscope_name):
         EzPickle.__init__(self, observation_space, action_space, hidden_spec, enable_obsnorm,
-                          min_stdev, init_logstdev, tblog, varscope_name)
+                          min_stdev, init_logstdev, varscope_name)
         self.hidden_spec = hidden_spec
         self.min_stdev = min_stdev
         self.init_logstdev = init_logstdev
@@ -24,7 +24,6 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
                                                 action_space.shape[0] *
                                                 2,  # Mean and diagonal stdev
                                                 enable_obsnorm,
-                                                tblog,
                                                 varscope_name)
 
     @property
@@ -81,9 +80,9 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
 class GaussianGRUPolicy(StochasticPolicy, EzPickle):
 
     def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, min_stdev,
-                 init_logstdev, state_include_action, tblog, varscope_name):
+                 init_logstdev, state_include_action, varscope_name):
         EzPickle.__init__(self, observation_space, action_space, hidden_spec, enable_obsnorm,
-                          min_stdev, init_logstdev, state_include_action, tblog, varscope_name)
+                          min_stdev, init_logstdev, state_include_action, varscope_name)
         self.hidden_spec = hidden_spec
         self.min_stdev = min_stdev
         self.init_logstdev = init_logstdev
@@ -96,7 +95,6 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
                                                 action_space.shape[0] *
                                                 2,  # Mean and diagonal stdev
                                                 enable_obsnorm,
-                                                tblog,
                                                 varscope_name)
 
     @property

@@ -13,7 +13,7 @@ from rltools.policy import Policy
 class StochasticPolicy(Policy):
 
     def __init__(self, observation_space, action_space, num_actiondist_params, enable_obsnorm,
-                 tblog, varscope_name):
+                 varscope_name):
         super(StochasticPolicy, self).__init__(observation_space, action_space)
 
         with tf.variable_scope(varscope_name) as self.varscope:
@@ -158,8 +158,6 @@ class StochasticPolicy(Policy):
                 self._take_descent_step = tf.train.AdamOptimizer(
                     learning_rate=self._learning_rate).apply_gradients(
                         util.safezip(vargrads, self._param_vars))
-
-            self._tbwriter = tf.train.SummaryWriter(tblog, graph=tf.get_default_graph())
 
     @property
     def distribution(self):

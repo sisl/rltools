@@ -11,14 +11,13 @@ from rltools.util import EzPickle
 
 class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
 
-    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, tblog,
-                 varscope_name):
-        EzPickle.__init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, tblog,
+    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, varscope_name):
+        EzPickle.__init__(self, observation_space, action_space, hidden_spec, enable_obsnorm,
                           varscope_name)
         self.hidden_spec = hidden_spec
         self._dist = Categorical(action_space.n)
         super(CategoricalMLPPolicy, self).__init__(observation_space, action_space, action_space.n,
-                                                   enable_obsnorm, tblog, varscope_name)
+                                                   enable_obsnorm, varscope_name)
 
     @property
     def distribution(self):
@@ -55,13 +54,13 @@ class CategoricalMLPPolicy(StochasticPolicy, EzPickle):
 
 class CategoricalGRUPolicy(StochasticPolicy):
 
-    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, tblog,
-                 varscope_name, state_include_action=True):
+    def __init__(self, observation_space, action_space, hidden_spec, enable_obsnorm, varscope_name,
+                 state_include_action=True):
         self.hidden_spec = hidden_spec
         self.state_include_action = state_include_action
         self._dist = RecurrentCategorical(action_space.n)
         super(CategoricalGRUPolicy, self).__init__(observation_space, action_space, action_space.n,
-                                                   enable_obsnorm, tblog, varscope_name)
+                                                   enable_obsnorm, varscope_name)
 
     @property
     def recurrent(self):
