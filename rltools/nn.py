@@ -190,8 +190,7 @@ class NonlinearityLayer(Layer):
 
 class ConvLayer(Layer):
 
-    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Sh, Sw, padding,
-                 initializer):
+    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Sh, Sw, padding, initializer):
         assert len(input_shape) == 3
         Ih, Iw, Ci = input_shape
         if padding == 'SAME':
@@ -351,7 +350,7 @@ def _parse_initializer(layerspec):
 
 class FeedforwardNet(Layer):
 
-    def __init__(self, input_B_Di, input_shape, layerspec_json):
+    def __init__(self, input_B_Di, input_shape, layerspec_json, debug=False):
         """
         Args:
             layerspec (string): JSON string describing layers
@@ -360,8 +359,9 @@ class FeedforwardNet(Layer):
         self.input_B_Di = input_B_Di
 
         layerspec = json.loads(layerspec_json)
-        util.ok('Loading feedforward net specification')
-        util.header(json.dumps(layerspec, indent=2, separators=(',', ': ')))
+        if debug:
+            util.ok('Loading feedforward net specification')
+            util.header(json.dumps(layerspec, indent=2, separators=(',', ': ')))
 
         self.layers = []
         with tf.variable_scope(type(self).__name__) as self.varscope:
@@ -385,14 +385,12 @@ class FeedforwardNet(Layer):
                                         Winitializer=_parse_initializer(ls), binitializer=None))
 
                     elif ls['type'] == 'conv':
-                        _check_keys(ls,
-                                    ['type', 'chanout', 'filtsize', 'stride', 'padding'],
+                        _check_keys(ls, ['type', 'chanout', 'filtsize', 'stride', 'padding'],
                                     ['initializer'])
                         self.layers.append(
                             ConvLayer(input_B_Ih_Iw_Ci=prev_output, input_shape=prev_output_shape,
-                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'],
-                                         Sh=ls['stride'], Sw=ls['stride'], 
-                                         padding=ls['padding'],
+                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'], Sh=ls[
+                                          'stride'], Sw=ls['stride'], padding=ls['padding'],
                                       initializer=_parse_initializer(ls)))
 
                     elif ls['type'] == 'nonlin':
@@ -422,12 +420,13 @@ class GRUNet(Layer):
                  input_B_T_Di,
                  input_shape,
                  output_dim,
-                 layer_specjson  # hidden_dim, output_dim, hidden_nonlin=tf.nn.relu,
+                 layer_specjson,  # hidden_dim, output_dim, hidden_nonlin=tf.nn.relu,
                  # hidden_init_trainable=False
-                ):
+                 debug=False):
         layerspec = json.loads(layer_specjson)
-        util.ok('Loading GRUNet specification')
-        util.header(json.dumps(layerspec, indent=2, separators=(',', ': ')))
+        if debug:
+            util.ok('Loading GRUNet specification')
+            util.header(json.dumps(layerspec, indent=2, separators=(',', ': ')))
         self._hidden_dim = layerspec['gru_hidden_dim']
         self._hidden_nonlin = {'relu': tf.nn.relu,
                                'elu': tf.nn.elu,
