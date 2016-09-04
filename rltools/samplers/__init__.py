@@ -91,14 +91,15 @@ class Sampler(object):
         raise NotImplementedError()
 
 
-def centrollout(env, act_fn, max_traj_len, action_space):
+def centrollout(env, policy, max_traj_len, action_space):
     assert env.reward_mech == 'global'
+    policy.reset()
     obs, actions, actiondists, rewards = [], [], [], []
     traj_info_list = []
     obs.append(np.c_[env.reset()].ravel()[None, ...].copy())
 
     for itr in range(max_traj_len):
-        a, adist = act_fn(obs[-1])
+        a, adist = policy.sample_actions(obs[-1])
         actions.append(a)
         actiondists.append(adist)
         if isinstance(action_space, spaces.Discrete):
@@ -142,15 +143,16 @@ def get_lists(nl, na):
     return l
 
 
-def decrollout(env, act_fn, max_traj_len, action_space):
-    assert not isinstance(act_fn, list)
+def decrollout(env, policy, max_traj_len, action_space):
+    assert not isinstance(policy, list)
+    policy.reset(dones=[True] * len(env.agents))
     trajs = []
     old_obs = env.reset()
     obs, actions, actiondists, rewards = get_lists(4, len(env.agents))
     traj_info_list = []
 
     for itr in range(max_traj_len):
-        agent_actions, adist_list = act_fn(np.asarray(old_obs))
+        agent_actions, adist_list = policy.sample_actions(np.asarray(old_obs))
         comp_actions = np.array(agent_actions)
         for i, agent_obs in enumerate(old_obs):
             obs[i].append(np.expand_dims(agent_obs, 0))
@@ -186,18 +188,28 @@ def decrollout(env, act_fn, max_traj_len, action_space):
     return trajs
 
 
-def concrollout(env, act_fns, max_traj_len, action_space):
-    assert len(act_fns) == len(env.agents)
+def concrollout(env, policies, max_traj_len, action_space):
+    assert len(policies) == len(env.agents)
 
+    for policy in policies:
+        policy.reset()
     trajs = []
     old_obs = env.reset()
     obs, actions, actiondists, rewards = get_lists(4, len(env.agents))
     traj_info_list = []
     for itr in range(max_traj_len):
-        agent_action_adist_list = [act_fn(np.expand_dims(oo, 0))
-                                   for act_fn, oo in zip(act_fns, old_obs)]
-        agent_actions = [part[0] for part in agent_action_adist_list]
-        adist_list = [part[1] for part in agent_action_adist_list]
+
+        # agent_action_adist_list = [act_fn(np.expand_dims(oo, 0))
+        #                            for act_fn, oo in zip(act_fns, old_obs)]
+        # agent_actions = [part[0] for part in agent_action_adist_list]
+        # adist_list = [part[1] for part in agent_action_adist_list]
+        agent_actions, adist_list = [], []
+        for i, agent_obs in enumerate(old_obs):
+            assert str(i) in policies[i].varscope.name
+            act, adist = policies[i].sample_actions(np.expand_dims(agent_obs, 0))
+            agent_actions.append(act)
+            adist_list.append(adist)
+
         comp_actions = np.array(agent_actions)
         for i, agent_obs in enumerate(old_obs):
             obs[i].append(np.expand_dims(agent_obs, 0))

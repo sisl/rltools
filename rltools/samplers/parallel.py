@@ -208,17 +208,8 @@ class RolloutServer(object):
         np.random.seed(seed)
         tf.set_random_seed(seed)
         random.seed(seed)
-        if self.mode == 'concurrent':
-            traj = self.rollout_fn(
-                self.env, [lambda ofeat: policy.sample_actions(ofeat) for policy in self.policy],
-                self.max_traj_len, self.action_space)
-        else:
-            if self.mode == 'decentralized':
-                self.policy.reset(dones=[True] * len(self.env.agents))
-            else:
-                self.policy.reset()
-            traj = self.rollout_fn(self.env, lambda ofeat: self.policy.sample_actions(ofeat),
-                                   self.max_traj_len, self.action_space)
+
+        traj = self.rollout_fn(self.env, self.policy, self.max_traj_len, self.action_space)
 
         return _dumps(traj)
 
