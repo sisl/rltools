@@ -10,8 +10,8 @@ class Trajectory(object):
     __slots__ = ('obs_T_Do', 'adist_T_Pa', 'a_T_Da', 'r_T', 'info_D')
 
     def __init__(self, obs_T_Do, adist_T_Pa, a_T_Da, r_T, info_D):
-        assert (obs_T_Do.ndim > 1 and adist_T_Pa.ndim > 1 and a_T_Da.ndim > 1 and r_T.ndim == 1 and
-                obs_T_Do.shape[0] == adist_T_Pa.shape[0] == a_T_Da.shape[0] == r_T.shape[0])
+        assert (obs_T_Do.ndim > 1 and a_T_Da.ndim > 1 and r_T.ndim == 1 and
+                obs_T_Do.shape[0] == a_T_Da.shape[0] == r_T.shape[0])
         self.obs_T_Do = obs_T_Do
         self.adist_T_Pa = adist_T_Pa
         self.a_T_Da = a_T_Da

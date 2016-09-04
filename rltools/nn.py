@@ -190,8 +190,7 @@ class NonlinearityLayer(Layer):
 
 class ConvLayer(Layer):
 
-    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Sh, Sw, padding,
-                 initializer):
+    def __init__(self, input_B_Ih_Iw_Ci, input_shape, Co, Fh, Fw, Sh, Sw, padding, initializer):
         assert len(input_shape) == 3
         Ih, Iw, Ci = input_shape
         if padding == 'SAME':
@@ -385,14 +384,12 @@ class FeedforwardNet(Layer):
                                         Winitializer=_parse_initializer(ls), binitializer=None))
 
                     elif ls['type'] == 'conv':
-                        _check_keys(ls,
-                                    ['type', 'chanout', 'filtsize', 'stride', 'padding'],
+                        _check_keys(ls, ['type', 'chanout', 'filtsize', 'stride', 'padding'],
                                     ['initializer'])
                         self.layers.append(
                             ConvLayer(input_B_Ih_Iw_Ci=prev_output, input_shape=prev_output_shape,
-                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'],
-                                         Sh=ls['stride'], Sw=ls['stride'], 
-                                         padding=ls['padding'],
+                                      Co=ls['chanout'], Fh=ls['filtsize'], Fw=ls['filtsize'], Sh=ls[
+                                          'stride'], Sw=ls['stride'], padding=ls['padding'],
                                       initializer=_parse_initializer(ls)))
 
                     elif ls['type'] == 'nonlin':

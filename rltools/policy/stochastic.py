@@ -50,22 +50,27 @@ class StochasticPolicy(Policy):
             self._normalized_obs = self.obsnorm.standardize_expr(self._obs)
 
             if self.recurrent:
-                self._actiondist, self._flatinnet, self.compute_step_mean_std, self._hidden_vec = self._make_actiondist_ops(
+                self._actiondist_dict, self._flatinnet, self.compute_step_mean_std, self._hidden_vec = self._make_actiondist_ops(
                     self._normalized_obs)
             else:
-                self._actiondist = self._make_actiondist_ops(self._normalized_obs)
+                self._actiondist_dict = self._make_actiondist_ops(self._normalized_obs)
 
+            self._actiondist_list = [self._actiondist_dict[k] for k in self.distribution.keys]
             self._input_action = tf.placeholder(action_type, action_shape,
                                                 name='input_actions')  # Action dims FIXME type
 
-            self._logprobs = self._make_actiondist_logprobs_ops(self._actiondist,
+            self._logprobs = self._make_actiondist_logprobs_ops(self._actiondist_dict,
                                                                 self._input_action)
 
             # proposal distribution from old policy
-            self._proposal_actiondist = tf.placeholder(tf.float32, actiondist_shape,
-                                                       name='proposal_actiondist')
-            self._proposal_logprobs = self._make_actiondist_logprobs_ops(self._proposal_actiondist,
-                                                                         self._input_action)
+            self._proposal_actiondist_dict = {k: tf.placeholder(tf.float32, [None,] *
+                                                                (1 + self.recurrent) + list(shape),
+                                                                name='proposal_{}'.format(k))
+                                              for k, shape in self.distribution.specs}
+            self._proposal_actiondist_list = [self._proposal_actiondist_dict[k]
+                                              for k in self.distribution.keys]
+            self._proposal_logprobs = self._make_actiondist_logprobs_ops(
+                self._proposal_actiondist_dict, self._input_action)
 
             # Advantage
             self._advantage = tf.placeholder(tf.float32, advantage_shape, name='advantage')
@@ -84,15 +89,15 @@ class StochasticPolicy(Policy):
                 self._reinfobj = tf.reduce_mean(impweight * self._advantage)  # Surrogate loss
 
             # KL
-            self._kl_coeff = tf.placeholder(tf.float32, name='kl_cost_coeff')
-            kl = self._make_actiondist_kl_ops(self._proposal_actiondist, self._actiondist)
+            kl = self._make_actiondist_kl_ops(self._proposal_actiondist_dict, self._actiondist_dict)
             if self.recurrent:
                 self._kl = tf.reduce_sum(kl * self._valid) / tf.reduce_sum(self._valid)
             else:
                 self._kl = tf.reduce_mean(kl, 0)  # Minimize kl divergence
 
-            # KL Penalty objective for PPO
-            self._penobj = self._reinfobj - self._kl_coeff * self._kl
+            # # KL Penalty objective for PPO
+            # self._kl_coeff = tf.placeholder(tf.float32, name='kl_cost_coeff')
+            # self._penobj = self._reinfobj - self._kl_coeff * self._kl
 
             # All trainable vars done (only _make_* methods)
 
@@ -108,13 +113,13 @@ class StochasticPolicy(Policy):
             # Gradients of objective
             self._reinfobj_grad_P = tfutil.flatcat(
                 tfutil.fixedgradients(self._reinfobj, self._param_vars))
-            self._penobj_grad_P = tfutil.flatcat(
-                tfutil.fixedgradients(self._penobj, self._param_vars))
+            # self._penobj_grad_P = tfutil.flatcat(
+            #     tfutil.fixedgradients(self._penobj, self._param_vars))
 
             # KL gradient for TRPO
             self._kl_grad_P = tfutil.flatcat(tfutil.fixedgradients(self._kl, self._param_vars))
 
-            ins = [self._obs, self._input_action, self._proposal_actiondist, self._advantage]
+            ins = [self._obs, self._input_action, self._advantage] + self._proposal_actiondist_list
             if self.recurrent:
                 ins.append(self._valid)
 
@@ -122,7 +127,7 @@ class StochasticPolicy(Policy):
                                                                     self._normalized_obs)
             self.compute_action_logprobs = tfutil.function([self._obs, self._input_action],
                                                            self._logprobs)
-            self.compute_action_dist_params = tfutil.function([self._obs], self._actiondist)
+            self.compute_action_dist_params = tfutil.function([self._obs], self._actiondist_list)
 
             self.compute_kl_cost = tfutil.function(ins, self._kl)
             self.compute_klgrad = tfutil.function(ins, self._kl_grad_P)
@@ -150,14 +155,14 @@ class StochasticPolicy(Policy):
             self.get_state = tfutil.function([], self._curr_all_params_PA)
             self.set_state = tfutil.function([self._flatallparams_PA], [],
                                              [self._assign_all_params])
-            # Treats placeholder self._flatparams_p as gradient for descent
-            with tf.variable_scope('optimizer'):
-                self._learning_rate = tf.placeholder(tf.float32, name='learning_rate')
-                vargrads = tfutil.unflatten_into_tensors(
-                    self._flatparams_P, [v.get_shape().as_list() for v in self._param_vars])
-                self._take_descent_step = tf.train.AdamOptimizer(
-                    learning_rate=self._learning_rate).apply_gradients(
-                        util.safezip(vargrads, self._param_vars))
+            # # Treats placeholder self._flatparams_p as gradient for descent
+            # with tf.variable_scope('optimizer'):
+            #     self._learning_rate = tf.placeholder(tf.float32, name='learning_rate')
+            #     vargrads = tfutil.unflatten_into_tensors(
+            #         self._flatparams_P, [v.get_shape().as_list() for v in self._param_vars])
+            #     self._take_descent_step = tf.train.AdamOptimizer(
+            #         learning_rate=self._learning_rate).apply_gradients(
+            #             util.safezip(vargrads, self._param_vars))
 
     @property
     def distribution(self):
@@ -191,8 +196,9 @@ class StochasticPolicy(Policy):
         """Sample actions conditioned on observations
         (Also returns the params)
         """
-        actiondist_B_Pa = self.compute_action_dist_params(obs_B_Df, **kwargs)
-        return self._sample_from_actiondist(actiondist_B_Pa, deterministic), actiondist_B_Pa
+        actiondist_list = self.compute_action_dist_params(obs_B_Df, **kwargs)
+        actiondist_dict = {k: actiondist_list[i] for i, k in enumerate(self.distribution.keys)}
+        return self._sample_from_actiondist(actiondist_dict, deterministic), actiondist_dict
 
     def deterministic_action(self, sess, obs_B_Df):
         """Return the argmax of distribution

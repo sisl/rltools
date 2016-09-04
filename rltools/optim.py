@@ -94,7 +94,11 @@ def ngstep(x0, obj0, objgrad0, obj_and_kl_func, hvpx0_func, max_kl, damping, max
     damped_hvp_func = lambda v: hvpx0_func(v) + damping * v
     hvpop = ssl.LinearOperator(shape=(x0.shape[0], x0.shape[0]), matvec=damped_hvp_func)
     step, _ = ssl.cg(hvpop, -objgrad0, maxiter=max_cg_iter)
-    fullstep = step / np.sqrt(.5 * step.dot(damped_hvp_func(step)) / max_kl + 1e-8)
+    init_step_size = np.sqrt(2.0 * max_kl * (1 / step.dot(damped_hvp_func(step))) + 1e-8)
+    if np.isnan(init_step_size):
+        init_step_size = .01  # XXX
+    fullstep = step * init_step_size
+    # fullstep = step / np.sqrt(.5 * step.dot(damped_hvp_func(step)) / max_kl + 1e-8)
 
     # Line search on objective with a hard KL wall
     if not enable_bt:

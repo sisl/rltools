@@ -46,14 +46,27 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
                                          initializer=tf.constant_initializer(self.init_logstdev))
         stdevs_1_Da = self.min_stdev + tf.exp(
             logstdevs_1_Da)  # Required for stability of kl computations
-        stdevs_B_Da = tf.ones_like(means_B_Da) * stdevs_1_Da
+        with tf.variable_scope('stdev'):
+            stdevs_B_Da = tf.ones_like(means_B_Da) * stdevs_1_Da
 
-        actiondist_B_Pa = tf.concat(1, [means_B_Da, stdevs_B_Da])
-        return actiondist_B_Pa
+        # actiondist_B_Pa = tf.concat(1, [means_B_Da, stdevs_B_Da])
+        # return actiondist_B_Pa
+        actiondist = dict(means=means_B_Da, stdevs=stdevs_B_Da)
+        return actiondist
 
-    def _extract_actiondist_params(self, actiondist_B_Pa):
-        means_B_Da = actiondist_B_Pa[:, :self.action_space.shape[0]]
-        stdevs_B_Da = actiondist_B_Pa[:, self.action_space.shape[0]:]
+    def _extract_actiondist_params(self, actiondist):
+
+        if isinstance(actiondist, dict):
+            means_B_Da = actiondist['means']
+            stdevs_B_Da = actiondist['stdevs']
+        elif isinstance(actiondist, (list, np.ndarray)):
+            means_B_Da = np.asarray([(adist['means']) for adist in actiondist])
+            stdevs_B_Da = np.asarray([adist['stdevs'] for adist in actiondist])
+        else:
+            import ipdb
+            ipdb.set_trace()
+        # means_B_Da = actiondist_B_Pa[:, :self.action_space.shape[0]]
+        # stdevs_B_Da = actiondist_B_Pa[:, self.action_space.shape[0]:]
         return means_B_Da, stdevs_B_Da
 
     def _make_actiondist_logprobs_ops(self, actiondist_B_Pa, input_actions_B_Da):
@@ -64,17 +77,27 @@ class GaussianMLPPolicy(StochasticPolicy, EzPickle):
         return self.distribution.kl_expr(*map(self._extract_actiondist_params,
                                               [proposal_actiondist_B_Pa, actiondist_B_Pa]))
 
-    def _sample_from_actiondist(self, actiondist_B_Pa, deterministic=False):
-        means_B_Da, stdevs_B_Da = self._extract_actiondist_params(actiondist_B_Pa)
+    def _sample_from_actiondist(self, actiondist_dict, deterministic=False):
+
+        # means_B_Da, stdevs_B_Da = actiondist_tuple
+        means_B_Da, stdevs_B_Da = self._extract_actiondist_params(actiondist_dict)
+        # means_B_Da, stdevs_B_Da = self.extract_dists(actiondist_B_Pa)
         if deterministic:
             return means_B_Da
-        stdnormal_B_Da = np.random.randn(actiondist_B_Pa.shape[0], self.action_space.shape[0])
+        stdnormal_B_Da = np.random.randn(means_B_Da.shape[0], self.action_space.shape[0])
         assert stdnormal_B_Da.shape == means_B_Da.shape == stdevs_B_Da.shape
         return (stdnormal_B_Da * stdevs_B_Da) + means_B_Da
 
     def _compute_actiondist_entropy(self, actiondist_B_Pa):
         _, stdevs_B_Da = self._extract_actiondist_params(actiondist_B_Pa)
         return self.distribution.entropy(stdevs_B_Da)
+
+    def extract_dists(self, actiondist_B_Pa):
+        import ipdb
+        ipdb.set_trace()
+        means_B_Da = actiondist_B_Pa[:, :self.action_space.shape[0]]
+        stdevs_B_Da = actiondist_B_Pa[:, self.action_space.shape[0]:]
+        return (means_B_Da, stdevs_B_Da)
 
 
 class GaussianGRUPolicy(StochasticPolicy, EzPickle):
@@ -212,5 +235,5 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
         # if self.state_include_action:
         #     actiondist_B_Da = np.concatenate([means_B_Da, stdevs_B_Da, prev_actions_B_Da], axis=1)
         # else:
-        actiondist_B_Da = np.concatenate([means_B_Da, stdevs_B_Da], axis=1)
+        actiondist_B_Da = np.concatenate([means_B_Da, stdevs_B_Da], axis=-1)
         return actions_B_Da, actiondist_B_Da

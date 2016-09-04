@@ -24,8 +24,8 @@ class SimpleSampler(Sampler):
         timesteps_sofar = 0
         while True:
             self.algo.policy.reset()
-            traj = centrollout(self.algo.env, lambda ofeat: self.algo.policy.sample_actions(ofeat),
-                               self.max_traj_len, self.algo.policy.action_space)
+            traj = centrollout(self.algo.env, self.algo.policy, self.max_traj_len,
+                               self.algo.policy.action_space)
             trajs.append(traj)
             timesteps_sofar += len(traj)
             if timesteps_sofar >= self.n_timesteps:
@@ -64,9 +64,8 @@ class DecSampler(Sampler):
         timesteps_sofar = 0
         while True:
             self.algo.policy.reset(dones=[True] * len(env.agents))
-            ag_trajs = decrollout(self.algo.env,
-                                  lambda ofeat: self.algo.policy.sample_actions(ofeat),
-                                  self.max_traj_len, self.algo.policy.action_space)
+            ag_trajs = decrollout(self.algo.env, self.algo.policy, self.max_traj_len,
+                                  self.algo.policy.action_space)
             trajs.extend(ag_trajs)
             timesteps_sofar += np.sum(map(len, ag_trajs))
             if timesteps_sofar >= self.n_timesteps:
@@ -102,12 +101,17 @@ class ConcSampler(Sampler):
         env = self.algo.env
         timesteps_sofar = 0
         trajslist = [[] for _ in range(len(env.agents))]
+
+        import pickle
+        for i, policy in enumerate(self.algo.policies):
+            pickle.dump(policy.get_params(), open('/tmp/policy_{}_{}.pkl'.format(i, itr), 'wb'))
+
+        init_policy_params = [policy.get_params() for policy in self.algo.policies]
+
         while True:
             [policy.reset() for policy in self.algo.policies]
-            ag_trajs = concrollout(
-                self.algo.env,
-                [lambda o: policy.sample_actions(o) for policy in self.algo.policies],
-                self.max_traj_len, self.algo.policies[0].action_space)
+            ag_trajs = concrollout(self.algo.env, self.algo.policies, self.max_traj_len,
+                                   self.algo.policies[0].action_space)
             for agid, agtraj in enumerate(ag_trajs):
                 trajslist[agid].append(agtraj)
 
@@ -115,7 +119,12 @@ class ConcSampler(Sampler):
             if timesteps_sofar >= self.n_timesteps:
                 break
 
+        after_policy_params = [policy.get_params() for policy in self.algo.policies]
+        assert all([a.all()
+                    for a in [init_pol == pol
+                              for init_pol, pol in zip(init_policy_params, after_policy_params)]])
         trajbatches = [TrajBatch.FromTrajs(trajs) for trajs in trajslist]
+        self.n_episodes += len(trajbatches[0])
         return (
             trajbatches,
             [('ret', np.mean(

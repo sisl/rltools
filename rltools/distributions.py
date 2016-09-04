@@ -119,11 +119,14 @@ class Gaussian(Distribution):
         means1, stdevs1 = means1_stdevs1
         means2, stdevs2 = means2_stdevs2
         with tf.op_scope([means1, stdevs1, means2, stdevs2], name, 'gaussian_kl') as scope:
-            D = tf.shape(means1)[len(means1.get_shape()) - 1]
-            kl = tf.mul(.5, (tf.reduce_sum(tf.square(stdevs1 / stdevs2), -1) + tf.reduce_sum(
-                tf.square((means2 - means1) / stdevs2), -1) + 2. * (tf.reduce_sum(
-                    tf.log(stdevs2), -1) - tf.reduce_sum(tf.log(stdevs1), -1)) - tf.to_float(D)),
-                        name=scope)
+            # D = tf.shape(means1)[len(means1.get_shape()) - 1]
+            # kl = tf.mul(.5, (tf.reduce_sum(tf.square(stdevs1 / stdevs2), -1) + tf.reduce_sum(
+            #     tf.square((means2 - means1) / stdevs2), -1) + 2. * (tf.reduce_sum(
+            #         tf.log(stdevs2), -1) - tf.reduce_sum(tf.log(stdevs1), -1)) - tf.to_float(D)),
+            #             name=scope)
+            num = tf.square(means2 - means1) + tf.square(stdevs2) - tf.square(stdevs1)
+            den = 2 * tf.square(stdevs2) + 1e-8
+            kl = tf.reduce_sum(num / den + stdevs2 - stdevs1, -1)
         return kl
 
     def log_density_expr(self, means, stdevs, x, name=None):
@@ -135,6 +138,14 @@ class Gaussian(Distribution):
             logprobs = tf.add(-.5 * tf.reduce_sum(tf.square((x - means) / stdevs), -1),
                               lognormconsts, name=scope)
         return logprobs
+
+    @property
+    def keys(self):
+        return ['means', 'stdevs']
+
+    @property
+    def specs(self):
+        return [('means', (self.dim,)), ('stdevs', (self.dim,))]
 
 
 RecurrentGaussian = Gaussian
