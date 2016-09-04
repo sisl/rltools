@@ -6,10 +6,14 @@
 #
 import argparse
 import json
+import os
 
 import h5py
 import numpy as np
 import pandas as pd
+
+pd.set_option('display.max_columns', 500)
+pd.set_option('display.width', 1000)
 
 
 def main():
@@ -28,6 +32,9 @@ def main():
     # Load logs from all files
     fname2log = {}
     for fname in args.logfiles:
+        if ':' in fname:
+            os.system('rsync -avrz {} /tmp'.format(fname))
+            fname = os.path.join('/tmp', os.path.basename(fname))
         with pd.HDFStore(fname, 'r') as f:
             assert fname not in fname2log
             df = f['log']
@@ -48,7 +55,8 @@ def main():
             print(fname)
             print(df[-1:])
 
-        df['vf_r2'] = np.maximum(0, df['vf_r2'])
+        if 'vf_r2' in df.keys():
+            df['vf_r2'] = np.maximum(0, df['vf_r2'])
 
         if not args.noplot:
             if ax is None:
