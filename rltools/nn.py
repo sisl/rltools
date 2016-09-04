@@ -99,9 +99,10 @@ class Layer(Model):
 
 class ReshapeLayer(Layer):
 
-    def __init__(self, input_, new_shape):
+    def __init__(self, input_, new_shape, debug=False):
         self._output_shape = tuple(new_shape)
-        util.header('Reshape(new_shape=%s)' % (str(self._output_shape),))
+        if debug:
+            util.header('Reshape(new_shape=%s)' % (str(self._output_shape),))
         with tf.variable_scope(type(self).__name__) as self.varscope:
             self._output = tf.reshape(input_, (-1,) + self._output_shape)
 
@@ -119,7 +120,7 @@ class FlattenLayer(Layer):
     outdim: number of output dimensions - (B, N) by default so 2. For images set 3
     """
 
-    def __init__(self, input_, outdim=2):
+    def __init__(self, input_, outdim=2, debug=False):
         assert outdim >= 1
         self._outdim = outdim
         input_shape = tuple(input_.get_shape().as_list())
@@ -130,7 +131,8 @@ class FlattenLayer(Layer):
             flattened = int(np.prod(to_flatten))
 
         self._output_shape = input_shape[1:self._outdim - 1] + (flattened,)
-        util.header('Flatten(new_shape=%s)' % str(self._output_shape))
+        if debug:
+            util.header('Flatten(new_shape=%s)' % str(self._output_shape))
         pre_shape = tf.shape(input_)[:self._outdim - 1:]
         to_flatten = tf.reduce_prod(tf.shape(input_)[self._outdim - 1:])
         self._output = tf.reshape(input_, tf.concat(0, [pre_shape, tf.pack([to_flatten])]))
@@ -146,9 +148,11 @@ class FlattenLayer(Layer):
 
 class AffineLayer(Layer):
 
-    def __init__(self, input_B_Di, input_shape, output_shape, Winitializer, binitializer):
+    def __init__(self, input_B_Di, input_shape, output_shape, Winitializer, binitializer,
+                 debug=False):
         assert len(input_shape) == len(output_shape) == 1
-        util.header('Affine(in=%d, out=%d)' % (input_shape[0], output_shape[0]))
+        if debug:
+            util.header('Affine(in=%d, out=%d)' % (input_shape[0], output_shape[0]))
         self._output_shape = (output_shape[0],)
         with tf.variable_scope(type(self).__name__) as self.varscope:
             if Winitializer is None:
@@ -171,8 +175,9 @@ class AffineLayer(Layer):
 
 class NonlinearityLayer(Layer):
 
-    def __init__(self, input_B_Di, output_shape, func):
-        util.header('Nonlinearity(func=%s)' % func)
+    def __init__(self, input_B_Di, output_shape, func, debug=False):
+        if debug:
+            util.header('Nonlinearity(func=%s)' % func)
         self._output_shape = output_shape
         with tf.variable_scope(type(self).__name__) as self.varscope:
             self.output_B_Do = {'relu': tf.nn.relu,
