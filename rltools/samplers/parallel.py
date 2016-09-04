@@ -31,16 +31,20 @@ class ParallelSampler(Sampler):
         self.n_workers = n_workers
         self.mode = mode
         self.discard_extra = discard_extra
-        if self.mode == 'concurrent':
-            self.proxies = [RolloutProxy(self.algo.env, self.algo.policies, max_traj_len, self.mode,
-                                         i) for i in range(self.n_workers)]
-        else:
-            self.proxies = [
-                RolloutProxy(self.algo.env, self.algo.policy, max_traj_len, self.mode, i)
-                for i in range(self.n_workers)
-            ]
+        self.workers = self.start_workers()
         self.seed_idx = 0
         self.seed_idx2 = 0
+
+    def start_workers(self):
+        if self.mode == 'concurrent':
+            proxies = [RolloutProxy(self.algo.env, self.algo.policies, self.max_traj_len, self.mode,
+                                    i) for i in range(self.n_workers)]
+        else:
+            proxies = [
+                RolloutProxy(self.algo.env, self.algo.policy, self.max_traj_len, self.mode, i)
+                for i in range(self.n_workers)
+            ]
+        return proxies
 
     def sample(self, sess, itr):
         if self.adaptive and itr > 0 and self.n_timesteps < self.n_timesteps_max:
@@ -51,7 +55,7 @@ class ParallelSampler(Sampler):
             state_str = _dumps([policy.get_state() for policy in self.algo.policies])
         else:
             state_str = _dumps(self.algo.policy.get_state())
-        [proxies.client("set_state", state_str, async=True) for proxies in self.proxies]
+        [worker.client("set_state", state_str, async=True) for worker in self.workers]
 
         self.seed_idx2 = self.seed_idx
         timesteps_sofar = 0
@@ -59,7 +63,7 @@ class ParallelSampler(Sampler):
         worker2job = {}
 
         def assign_job_to(i_worker):
-            worker2job[i_worker] = (self.seed_idx2, self.proxies[i_worker].client("sample",
+            worker2job[i_worker] = (self.seed_idx2, self.workers[i_worker].client("sample",
                                                                                   self.seed_idx2,
                                                                                   async=True))
             self.seed_idx2 += 1
@@ -174,9 +178,12 @@ class RolloutProxy(object):
         oenv["OMP_NUM_THREADS"] = "1"
         oenv["MKL_NUM_THREADS"] = "1"
 
+        # TODO handle singularity
         self.popen = subprocess.Popen(
             ["python2", "-m", "rltools.samplers.parallel", self.f.name, addr], env=oenv)
         if sys.platform in ["linux2", "linux"]:
+            # Sets affinity to cpus
+            # TODO reconsider?
             subprocess.check_call(["taskset", "-cp", str(idx), str(self.popen.pid)])
 
         self.client = zerorpc.Client(heartbeat=60, timeout=1000)
