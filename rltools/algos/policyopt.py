@@ -141,7 +141,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
         self.sampler = sampler_cls(self, **sampler_args)
         self.total_time = 0.0
 
-    def train(self, sess, log, save_freq, blend_freq=0, keep_kmax=0):
+    def train(self, sess, log, save_freq, blend_freq=0, keep_kmax=0, blend_eval_trajs=50):
         for itr in range(self.start_iter, self.n_iter):
             iter_info = self.step(sess, itr)
             log.write(iter_info, print_header=itr % 20 == 0)
@@ -157,7 +157,8 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     evalrewards[agid] = np.mean(
                         util.evaluate_policy(self.env, [
                             policy for _ in range(len(self.env.agents))
-                        ], n_trajs=10, deterministic=False, max_traj_len=self.sampler.max_traj_len,
+                        ], n_trajs=blend_eval_trajs, deterministic=False,
+                                             max_traj_len=self.sampler.max_traj_len,
                                              mode='concurrent', disc=self.discount)['ret'])
 
                 weights = evalrewards / np.sum(evalrewards)
