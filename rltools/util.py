@@ -149,9 +149,12 @@ def evaluate_policy(env, policy, n_trajs, deterministic, max_traj_len, mode, dis
     from rltools.trajutil import TrajBatch
     proxies = [RolloutProxy(env, policy, max_traj_len, mode, i) for i in range(n_workers)]
 
-    policy_str = cPickle.dumps(policy.get_state(), protocol=-1)
+    if mode == 'concurrent':
+        state_str = cPickle.dumps([p.get_state() for p in policy])
+    else:
+        state_str = cPickle.dumps(policy.get_state(), protocol=-1)
     for proxy in proxies:
-        proxy.client("set_state", policy_str, async=True)
+        proxy.client("set_state", state_str, async=True)
 
     seed_idx = 0
     seed_idx2 = seed_idx
@@ -205,7 +208,7 @@ def evaluate_policy(env, policy, n_trajs, deterministic, max_traj_len, mode, dis
         discret = discount(r_B_T, disc).mean()
         info = {tinfo[0]: np.mean(tinfo[1]) for tinfo in trajbatch.info}
         return dict(ret=ret, disc_ret=discret, **info)
-    elif mode == 'decentralized':
+    elif mode in ['decentralized', 'concurrent']:
         agent2trajs = {}
         for agid in range(len(env.agents)):
             agent2trajs[agid] = []

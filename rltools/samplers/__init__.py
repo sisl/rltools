@@ -198,14 +198,8 @@ def concrollout(env, policies, max_traj_len, action_space):
     obs, actions, actiondists, rewards = get_lists(4, len(env.agents))
     traj_info_list = []
     for itr in range(max_traj_len):
-
-        # agent_action_adist_list = [act_fn(np.expand_dims(oo, 0))
-        #                            for act_fn, oo in zip(act_fns, old_obs)]
-        # agent_actions = [part[0] for part in agent_action_adist_list]
-        # adist_list = [part[1] for part in agent_action_adist_list]
         agent_actions, adist_list = [], []
         for i, agent_obs in enumerate(old_obs):
-            assert str(i) in policies[i].varscope.name
             act, adist = policies[i].sample_actions(np.expand_dims(agent_obs, 0))
             agent_actions.append(act)
             adist_list.append(adist)

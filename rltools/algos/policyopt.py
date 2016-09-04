@@ -33,7 +33,7 @@ class SamplingPolicyOptimizer(RLAlgorithm):
         self.update_curriculum = update_curriculum
         self.total_time = 0.0
 
-    def train(self, sess, log, save_freq):
+    def train(self, sess, log, save_freq, **kwargs):
         for itr in range(self.start_iter, self.n_iter):
             iter_info = self.step(sess, itr)
             log.write(iter_info, print_header=itr % 20 == 0)
@@ -125,13 +125,12 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
 
     def __init__(self, env, policies, baselines, step_func, discount, gae_lambda, n_iter,
                  start_iter=0, sampler_cls=None, sampler_args=None, target_policy=None,
-                 weights=None, interp_alpha=None, **kwargs):
+                 interp_alpha=None, **kwargs):
         self.env = env
         self.policies = policies
         self.baselines = baselines
         self.step_func = step_func
         self.target_policy = target_policy
-        self.weights = weights
         self.interp_alpha = interp_alpha
         self.discount = discount
         self.gae_lambda = gae_lambda
@@ -142,7 +141,7 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
         self.sampler = sampler_cls(self, **sampler_args)
         self.total_time = 0.0
 
-    def train(self, sess, log, save_freq, blend_freq=0):
+    def train(self, sess, log, save_freq, blend_freq=0, keep_kmax=0):
         for itr in range(self.start_iter, self.n_iter):
             iter_info = self.step(sess, itr)
             log.write(iter_info, print_header=itr % 20 == 0)
@@ -152,17 +151,35 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
 
             if blend_freq > 0:
                 assert self.target_policy is not None
-                assert np.isclose(sum(self.weights), 1)
+                evalrewards = np.zeros(len(self.env.agents))
+                # Rewards when all agents have the same policy
+                for agid, policy in enumerate(self.policies):
+                    evalrewards[agid] = np.mean(
+                        util.evaluate_policy(self.env, [
+                            policy for _ in range(len(self.env.agents))
+                        ], n_trajs=10, deterministic=False, max_traj_len=self.sampler.max_traj_len,
+                                             mode='concurrent', disc=self.discount)['ret'])
+
+                weights = evalrewards / np.sum(evalrewards)
+                if all(evalrewards < 0):
+                    weights = 1 - weights
                 params_P_ag = [policy.get_params() for policy in self.policies]
-                weightparams_P = np.sum([w * p for w, p in util.safezip(self.weights, params_P_ag)])
+                weightparams_P = np.sum([w * p for w, p in util.safezip(weights, params_P_ag)],
+                                        axis=0)
                 if itr == 0:
-                    blendparams_P = 0.001 * self.target_policy.get_params(
-                        sess) + 0.999 * weightparams_P
-                if itr > 1 and (itr % blend_freq == 0 or itr % self.n_iter):
+                    blendparams_P = 0.001 * self.target_policy.get_params() + 0.999 * weightparams_P
+                if itr > 0 and (itr % blend_freq == 0 or itr % self.n_iter):
                     blendparams_P = self.interp_alpha * self.target_policy.get_params() + (
                         1 - self.interp_alpha) * weightparams_P
                 self.target_policy.set_params(blendparams_P)
-                for policies in self.policies:
+                log.write_snapshot(sess, self.target_policy, itr)
+                if keep_kmax:
+                    keep_inds = np.argpartition(evalrewards, -keep_kmax)[-keep_kmax:]
+                else:
+                    keep_inds = []
+                for agid, policies in enumerate(self.policies):
+                    if agid in keep_inds:
+                        continue
                     policies.set_params(blendparams_P)
 
     def step(self, sess, itr):
