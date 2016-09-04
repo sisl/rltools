@@ -150,28 +150,24 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     log.write_snapshot(sess, policy, itr)
 
             if blend_freq > 0:
+                # Blending does not work
                 assert self.target_policy is not None
-                evalrewards = np.zeros(len(self.env.agents))
-                # Rewards when all agents have the same policy
-                for agid, policy in enumerate(self.policies):
-                    evalrewards[agid] = np.mean(
-                        util.evaluate_policy(self.env, [
-                            policy for _ in range(len(self.env.agents))
-                        ], n_trajs=blend_eval_trajs, deterministic=False,
-                                             max_traj_len=self.sampler.max_traj_len,
-                                             mode='concurrent', disc=self.discount)['ret'])
-
-                weights = evalrewards / np.sum(evalrewards)
-                if all(evalrewards < 0):
-                    weights = 1 - weights
-                params_P_ag = [policy.get_params() for policy in self.policies]
-                weightparams_P = np.sum([w * p for w, p in util.safezip(weights, params_P_ag)],
-                                        axis=0)
                 if itr == 0:
+                    params_P_ag = [policy.get_params() for policy in self.policies]
+                    weights, evalrewards = self._eval_policy_weights(blend_eval_trajs)
+                    weightparams_P = np.sum([w * p for w, p in util.safezip(weights, params_P_ag)],
+                                            axis=0)
+
                     blendparams_P = 0.001 * self.target_policy.get_params() + 0.999 * weightparams_P
                 if itr > 0 and (itr % blend_freq == 0 or itr % self.n_iter):
+                    params_P_ag = [policy.get_params() for policy in self.policies]
+                    weights, evalrewards = self._eval_policy_weights(blend_eval_trajs)
+                    weightparams_P = np.sum([w * p for w, p in util.safezip(weights, params_P_ag)],
+                                            axis=0)
+
                     blendparams_P = self.interp_alpha * self.target_policy.get_params() + (
                         1 - self.interp_alpha) * weightparams_P
+
                 self.target_policy.set_params(blendparams_P)
                 log.write_snapshot(sess, self.target_policy, itr)
                 if keep_kmax:
@@ -182,6 +178,21 @@ class ConcurrentPolicyOptimizer(RLAlgorithm):
                     if agid in keep_inds:
                         continue
                     policies.set_params(blendparams_P)
+
+    def _eval_policy_weights(self, eval_trajs):
+        evalrewards = np.zeros(len(self.env.agents))
+        # Rewards when all agents have the same policy
+        for agid, policy in enumerate(self.policies):
+            evalrewards[agid] = np.mean(
+                util.evaluate_policy(self.env, [
+                    policy for _ in range(len(self.env.agents))
+                ], n_trajs=eval_trajs, deterministic=False, max_traj_len=self.sampler.max_traj_len,
+                                     mode='concurrent', disc=self.discount)['ret'])
+
+        weights = evalrewards / np.sum(evalrewards)
+        if all(evalrewards < 0):
+            weights = 1 - weights
+        return weights, evalrewards
 
     def step(self, sess, itr):
         with util.Timer() as t_all:
