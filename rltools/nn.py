@@ -442,13 +442,23 @@ class GRUNet(Layer):
         assert len(input_shape) >= 1  # input_shape is Di
         self.input_B_T_Di = input_B_T_Di
         with tf.variable_scope(type(self).__name__) as self.varscope:
-
-            self._step_input = tf.placeholder(tf.float32, shape=(None,) + input_shape,
+            if 'feature_net' in layerspec:
+                _feature_net = FeedforwardNet(input_B_T_Di, input_shape, layerspec['feature_net'])
+                self._feature_shape = _feature_net.output_shape
+                self._feature = tf.reshape(_feature_net.output,
+                                           tf.pack([tf.shape(self.input_B_T_Di)[0],
+                                                    tf.shape(self.input_B_T_Di)[1],
+                                                    self._feature_shape[-1]]))
+            else:
+                self._feature_shape = input_shape
+                self._feature = input_B_T_Di
+            self._step_input = tf.placeholder(tf.float32, shape=(None,) + self._feature_shape,
                                               name='step_input')
             self._step_prev_hidden = tf.placeholder(tf.float32, shape=(None, self._hidden_dim),
                                                     name='step_prev_hidden')
 
-            self._gru_layer = GRULayer(input_B_T_Di, input_shape, hidden_units=self._hidden_dim,
+            self._gru_layer = GRULayer(self._feature, self._feature_shape,
+                                       hidden_units=self._hidden_dim,
                                        hidden_nonlin=self._hidden_nonlin, initializer=None,
                                        hidden_init_trainable=self._hidden_init_trainable)
             self._gru_flat_layer = ReshapeLayer(self._gru_layer.output,
