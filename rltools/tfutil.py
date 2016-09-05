@@ -72,7 +72,7 @@ def unflatten_into_tensors(flatparams_P, output_shapes, name=None):
         outputs = []
         curr_pos = 0
         for shape in output_shapes:
-            size = np.prod(shape)
+            size = np.prod(shape).astype('int')
             flatval = flatparams_P[curr_pos:curr_pos + size]
             outputs.append(tf.reshape(flatval, shape))
             curr_pos += size
