@@ -12,6 +12,7 @@ import tensorflow as tf
 import zerorpc
 from gevent import Timeout
 from zerorpc.gevent_zmq import logger as gevent_log
+from multiprocessing import cpu_count
 
 from rltools.samplers import Sampler, decrollout, centrollout, concrollout
 from rltools.trajutil import TrajBatch, Trajectory
@@ -36,12 +37,13 @@ class ParallelSampler(Sampler):
         self.seed_idx2 = 0
 
     def start_workers(self):
+        sidx = np.random.randint(cpu_count())
         if self.mode == 'concurrent':
             proxies = [RolloutProxy(self.algo.env, self.algo.policies, self.max_traj_len, self.mode,
-                                    i) for i in range(self.n_workers)]
+                                    i, sidx) for i in range(self.n_workers)]
         else:
             proxies = [
-                RolloutProxy(self.algo.env, self.algo.policy, self.max_traj_len, self.mode, i)
+                RolloutProxy(self.algo.env, self.algo.policy, self.max_traj_len, self.mode, i, sidx)
                 for i in range(self.n_workers)
             ]
         return proxies
@@ -165,7 +167,7 @@ class ParallelSampler(Sampler):
 
 class RolloutProxy(object):
 
-    def __init__(self, env, policy, max_traj_len, mode, idx):
+    def __init__(self, env, policy, max_traj_len, mode, idx, sidx):
         self.f = tempfile.NamedTemporaryFile()
         args = (env, policy, max_traj_len, mode)
         self.f.write(_dumps(args))
@@ -182,9 +184,9 @@ class RolloutProxy(object):
         self.popen = subprocess.Popen(
             ["python2", "-m", "rltools.samplers.parallel", self.f.name, addr], env=oenv)
         if sys.platform in ["linux2", "linux"]:
+            cidx = (sidx + idx) % cpu_count()
             # Sets affinity to cpus
-            # TODO reconsider?
-            subprocess.check_call(["taskset", "-cp", str(idx), str(self.popen.pid)])
+            subprocess.check_call(["taskset", "-cp", str(cidx), str(self.popen.pid)])
 
         self.client = zerorpc.Client(heartbeat=60, timeout=1000)
         self.client.connect(addr)
