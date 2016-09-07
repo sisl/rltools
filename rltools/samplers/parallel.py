@@ -38,14 +38,13 @@ class ParallelSampler(Sampler):
 
     def start_workers(self):
         sidx = np.random.randint(cpu_count())
-        if self.mode == 'concurrent':
-            proxies = [RolloutProxy(self.algo.env, self.algo.policies, self.max_traj_len, self.mode,
-                                    i, sidx) for i in range(self.n_workers)]
-        else:
-            proxies = [
-                RolloutProxy(self.algo.env, self.algo.policy, self.max_traj_len, self.mode, i, sidx)
-                for i in range(self.n_workers)
-            ]
+        # yapf: disable
+        proxies = [RolloutProxy(self.algo.env,
+                                self.algo.policies if self.mode == 'concurrent' else self.algo.policy,
+                                self.max_traj_len,
+                                self.mode, i,sidx)
+                   for i in range(self.n_workers)]
+        # yapf: enable
         return proxies
 
     def sample(self, sess, itr):
