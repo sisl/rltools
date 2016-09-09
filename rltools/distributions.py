@@ -85,7 +85,11 @@ class RecurrentCategorical(Distribution):
     def entropy(self, probs_N_H_K):
         tmp = -probs_N_H_K * np.log(probs_N_H_K + TINY)
         tmp[~np.isfinite(tmp)] = 0
-        return tmp.sum(axis=2)
+        return tmp.sum(axis=-1)
+
+    def sample(self, probs_N_K):
+        """Sample from N categorical distributions, each over K outcomes"""
+        return self._cat.sample(probs_N_K)
 
     def kl_expr(self, logprobs1_B_H_A, logprobs2_B_H_A, name=None):
         """KL divergence between categorical distributions, specified as log probabilities"""
@@ -95,10 +99,11 @@ class RecurrentCategorical(Distribution):
         return kl_B_H
 
     def log_density_expr(self, dist_params_B_H_A, x_B_H_A):
-        adim = dist_params_B_H_A.shape[-1]
+        adim = tf.shape(dist_params_B_H_A)[len(dist_params_B_H_A.get_shape()) - 1]
         flat_logd = self._cat.log_density_expr(
-            tf.reshape(dist_params_B_H_A, (-1, adim)), tf.reshape(x_B_H_A, (-1, adim)))
-        return tf.reshape(flat_logd, dist_params_B_H_A.shape)
+            tf.reshape(dist_params_B_H_A, tf.pack([-1, adim])),
+            tf.reshape(x_B_H_A, tf.pack([-1, adim])))
+        return tf.reshape(flat_logd, tf.shape(dist_params_B_H_A)[:2])
 
 
 class Gaussian(Distribution):

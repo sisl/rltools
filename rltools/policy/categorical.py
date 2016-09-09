@@ -103,14 +103,14 @@ class CategoricalGRUPolicy(StochasticPolicy):
 
         dones = np.asarray(dones)
         if self.prev_actions is None or len(dones) != len(self.prev_actions):
-            self.prev_actions = np.zeros((len(dones), self.action_space.shape[0]))
+            self.prev_actions = np.zeros((len(dones), self.action_space.n))
             self.prev_hiddens = np.zeros((len(dones), self.hidden_dim))
 
         self.prev_actions[dones] = 0.
         self.prev_hiddens[dones] = self._hidden_vec.eval()
 
-    def _make_actiondist_logprobs_ops(self, actiondist_B_Pa, input_actions_B_Da):
-        return self.distribution.log_density_expr(actiondist_B_Pa, input_actions_B_Da[:, 0])
+    def _make_actiondist_logprobs_ops(self, actiondist_B_H_Pa, input_actions_B_H_Da):
+        return self.distribution.log_density_expr(actiondist_B_H_Pa, input_actions_B_H_Da[:, :, 0])
 
     def _make_actiondist_kl_ops(self, proposal_actiondist_B_Pa, actiondist_B_Pa):
         return self.distribution.kl_expr(proposal_actiondist_B_Pa, actiondist_B_Pa)
@@ -120,6 +120,9 @@ class CategoricalGRUPolicy(StochasticPolicy):
 
     def _sample_from_actiondist(self, actiondist_B_Pa, deterministic=False):
         probs_B_A = np.exp(actiondist_B_Pa)
+        # XXX
+        probs_B_A = probs_B_A / probs_B_A.sum(axis=1)[:, None]
+        # XXX
         assert probs_B_A.shape[1] == self.action_space.n
         if deterministic:
             return np.argmax(probs_B_A, axis=1)[:, None]
