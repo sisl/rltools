@@ -197,8 +197,8 @@ class GaussianGRUPolicy(StochasticPolicy, EzPickle):
         else:
             net_in_B_Do = flat_obs_B_Df
 
-        means_B_Da, stdevs_B_Da, hidden_vec = self.compute_step_mean_std(net_in_B_Do,
-                                                                         self.prev_hiddens)
+        means_B_Da, stdevs_B_Da, hidden_vec = self.compute_step_actiondist(net_in_B_Do,
+                                                                           self.prev_hiddens)
         if deterministic:
             actions_B_Da = means_B_Da
         else:

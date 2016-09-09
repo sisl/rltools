@@ -50,7 +50,7 @@ class StochasticPolicy(Policy):
             self._normalized_obs = self.obsnorm.standardize_expr(self._obs)
 
             if self.recurrent:
-                self._actiondist, self._flatinnet, self.compute_step_mean_std, self._hidden_vec = self._make_actiondist_ops(
+                self._actiondist, self._flatinnet, self.compute_step_actiondist, self._hidden_vec = self._make_actiondist_ops(
                     self._normalized_obs)
             else:
                 self._actiondist = self._make_actiondist_ops(self._normalized_obs)
