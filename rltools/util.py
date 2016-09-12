@@ -147,7 +147,7 @@ def evaluate_policy(env, policy, n_trajs, deterministic, max_traj_len, mode, dis
     import time
     from gevent import Timeout
     from rltools.trajutil import TrajBatch
-    proxies = [RolloutProxy(env, policy, max_traj_len, mode, i) for i in range(n_workers)]
+    proxies = [RolloutProxy(env, policy, max_traj_len, mode, i, 0) for i in range(n_workers)]
 
     if mode == 'concurrent':
         state_str = cPickle.dumps([p.get_state() for p in policy])
