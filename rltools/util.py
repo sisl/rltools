@@ -217,17 +217,18 @@ def evaluate_policy(env, policy, n_trajs, deterministic, max_traj_len, mode, dis
                 agent2trajs[agid].append(agtraj)
 
         agent2trajbatch = {}
-        rets = []
+        rets, retsstd = [], []
         discrets = []
         infos = []
         for agent, trajs in agent2trajs.items():
             agent2trajbatch[agent] = TrajBatch.FromTrajs(trajs)
             r_B_T = agent2trajbatch[agent].r.padded(fill=0.)
             rets.append(r_B_T.sum(axis=1).mean())
+            retsstd.append(r_B_T.sum(axis=1).std())
             discrets.append(discount(r_B_T, disc).mean())
             infos.append({tinfo[0]: np.mean(tinfo[1]) for tinfo in agent2trajbatch[agent].info})
         infos = stack_dict_list(infos)
-        return dict(ret=rets, disc_ret=discrets, **infos)
+        return dict(ret=rets, retstd=retsstd, disc_ret=discrets, **infos)
     else:
         raise NotImplementedError()
 
