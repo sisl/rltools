@@ -377,17 +377,18 @@ class FeedforwardNet(Layer):
                 with tf.variable_scope('layer_%d' % i_layer):
                     if ls['type'] == 'reshape':
                         _check_keys(ls, ['type', 'new_shape'], [])
-                        self.layers.append(ReshapeLayer(prev_output, ls['new_shape']))
+                        self.layers.append(ReshapeLayer(prev_output, ls['new_shape'], debug=debug))
 
                     elif ls['type'] == 'flatten':
                         _check_keys(ls, ['type'], [])
-                        self.layers.append(FlattenLayer(prev_output))
+                        self.layers.append(FlattenLayer(prev_output, debug=debug))
 
                     elif ls['type'] == 'fc':
                         _check_keys(ls, ['type', 'n'], ['initializer'])
                         self.layers.append(
                             AffineLayer(prev_output, prev_output_shape, output_shape=(ls['n'],),
-                                        Winitializer=_parse_initializer(ls), binitializer=None))
+                                        Winitializer=_parse_initializer(ls), binitializer=None,
+                                        debug=debug))
 
                     elif ls['type'] == 'conv':
                         _check_keys(ls, ['type', 'chanout', 'filtsize', 'stride', 'padding'],
@@ -401,7 +402,8 @@ class FeedforwardNet(Layer):
                     elif ls['type'] == 'nonlin':
                         _check_keys(ls, ['type', 'func'], [])
                         self.layers.append(
-                            NonlinearityLayer(prev_output, prev_output_shape, ls['func']))
+                            NonlinearityLayer(prev_output, prev_output_shape, ls['func'],
+                                              debug=debug))
 
                     else:
                         raise NotImplementedError('Unknown layer type %s' % ls['type'])
