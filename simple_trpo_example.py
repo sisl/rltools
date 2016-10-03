@@ -77,7 +77,7 @@ def main():
     # init policy network
     policy = CategoricalMLPPolicy(env.observation_space, env.action_space,
                                   hidden_spec=args.policy_hidden_spec, enable_obsnorm=True,
-                                  tblog=args.tblog, varscope_name='pursuit_catmlp_policy')
+                                  varscope_name='pursuit_catmlp_policy')
 
     # init baseline
     baseline = MLPBaseline(env.observation_space, args.baseline_hidden_spec, True, True,

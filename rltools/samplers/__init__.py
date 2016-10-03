@@ -92,7 +92,6 @@ class Sampler(object):
 
 
 def centrollout(env, policy, max_traj_len, action_space):
-    assert env.reward_mech == 'global'
     policy.reset()
     obs, actions, actiondists, rewards = [], [], [], []
     traj_info_list = []
@@ -112,8 +111,11 @@ def centrollout(env, policy, max_traj_len, action_space):
         else:
             o2, r, done, info = env.step(actions[-1][0])
 
-        assert (r == r[0]).all()
-        rewards.append(r[0])
+        if isinstance(r, list) or isinstance(r, np.ndarray):
+            assert (r == r[0]).all()
+            rewards.append(r[0])
+        else:
+            rewards.append(r)
 
         if info:
             traj_info_list.append(info)
@@ -230,8 +232,6 @@ def concrollout(env, policies, max_traj_len, action_space):
 
     traj_info = rltools.util.stack_dict_list(traj_info_list)
     for agnt in range(len(env.agents)):
-        obs_T_Do = np.concatenate(obs[agnt])
-        adist_T_Pa = np.concatenate(np.asarray(actiondists[agnt]))
         a_T_Da = np.concatenate(np.asarray(actions[agnt]))
         r_T = np.asarray(rewards[agnt])
         trajs.append(Trajectory(obs_T_Do, adist_T_Pa, a_T_Da, r_T, traj_info))
